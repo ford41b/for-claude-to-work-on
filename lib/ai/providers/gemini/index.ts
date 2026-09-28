@@ -79,16 +79,21 @@ export function classifyGeminiError(err: unknown, context: { hasYouTube: boolean
     return new AIError("timeout", { detail });
   }
   let code: AIErrorCode = "unavailable";
-  if (status === 401 || (status === 403 && !context.hasYouTube) || lower.includes("api key not valid")) code = "auth_failed";
+  const keyProblem = /(api key|api_key|service_disabled|has not been used in project|billing)/.test(lower);
+  if (status === 401 || (status === 403 && (!context.hasYouTube || keyProblem)) || lower.includes("api key not valid")) code = "auth_failed";
   else if (status === 429) code = lower.includes("quota") && lower.includes("exceeded") && lower.includes("per day") ? "quota_exceeded" : "rate_limited";
+  // A wrong or retired model name is our configuration, never the user's video.
+  else if (status === 404 && /models\//.test(lower)) code = "model_not_found";
+  else if (/is not supported for generatecontent|model .*not (found|supported)/.test(lower)) code = "model_not_found";
   else if (context.hasYouTube && (status === 400 || status === 403 || status === 404)) {
-    if (/(private|unlisted|permission|not public|access)/.test(lower)) code = "media_private";
-    else if (/(unavailable|not found|removed|does not exist|cannot be accessed|invalid video)/.test(lower)) code = "media_unavailable";
-    else if (/(too long|exceeds|token count|context)/.test(lower)) code = "media_too_long";
-    else code = "media_unavailable";
+    if (/(private|unlisted|not public|permission to access)/.test(lower)) code = "media_private";
+    else if (/(video unavailable|video not found|removed|does not exist|cannot be accessed|invalid video|youtube)/.test(lower)) code = "media_unavailable";
+    else if (/(too long|token count|exceeds the maximum)/.test(lower)) code = "media_too_long";
+    // Anything else (a schema or setting Gemini refused) is not evidence about the video.
+    else code = "request_rejected";
   } else if (status === 400 && /(token count|too long|exceeds the maximum)/.test(lower)) code = "media_too_long";
   else if (status === 400 && /(mime|unsupported|not supported)/.test(lower)) code = "media_unsupported";
-  else if (status === 400) code = "invalid_output";
+  else if (status === 400) code = "request_rejected";
   else if (status && status >= 500) code = "unavailable";
   return new AIError(code, { detail });
 }

@@ -143,6 +143,14 @@ describe("classifyGeminiError", () => {
     expect(classifyGeminiError(api(400, "Video unavailable"), { hasYouTube: true }).code).toBe("media_unavailable");
     expect(classifyGeminiError(api(400, "Video unavailable"), { hasYouTube: true }).retryable).toBe(false);
   });
+  it("does not blame the video for our own configuration or request problems", () => {
+    const yt = { hasYouTube: true };
+    expect(classifyGeminiError(api(404, "models/gemini-9-flash is not found for API version v1beta, or is not supported for generateContent."), yt).code).toBe("model_not_found");
+    expect(classifyGeminiError(api(400, "Invalid JSON payload received. Unknown name \"thinkingLevel\""), yt).code).toBe("request_rejected");
+    expect(classifyGeminiError(api(400, "Request contains an invalid argument."), yt).code).toBe("request_rejected");
+    expect(classifyGeminiError(api(403, "Method doesn't allow unregistered callers. Please use API Key."), yt).code).toBe("auth_failed");
+    expect(classifyGeminiError(api(400, "The input token count (1200000) exceeds the maximum number of tokens allowed (1048576)."), yt).code).toBe("media_too_long");
+  });
   it("maps rate limits, outages, and auth", () => {
     expect(classifyGeminiError(api(429, "Resource has been exhausted"), { hasYouTube: false })).toMatchObject({ code: "rate_limited", retryable: true });
     expect(classifyGeminiError(api(503, "The model is overloaded"), { hasYouTube: false })).toMatchObject({ code: "unavailable", retryable: true });

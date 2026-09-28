@@ -8,6 +8,8 @@ export type AIErrorCode =
   | "rate_limited"
   | "quota_exceeded"
   | "auth_failed"
+  | "model_not_found"
+  | "request_rejected"
   | "invalid_output"
   | "content_blocked"
   | "media_private"
@@ -22,6 +24,8 @@ const RETRYABLE: Record<AIErrorCode, boolean> = {
   rate_limited: true,
   quota_exceeded: false,
   auth_failed: false,
+  model_not_found: false,
+  request_rejected: false,
   invalid_output: true,
   content_blocked: false,
   media_private: false,
@@ -37,6 +41,8 @@ export const AI_ERROR_MESSAGES: Record<AIErrorCode, string> = {
   rate_limited: "The AI service is busy right now. We'll retry shortly.",
   quota_exceeded: "The AI service's usage limit has been reached. Please try again later.",
   auth_failed: "The AI service rejected our credentials. An administrator needs to check the configuration.",
+  model_not_found: "The AI model this app is set to use isn't available. An administrator needs to check the model settings.",
+  request_rejected: "The AI service couldn't process this request. Your notes are saved, and you can try again.",
   invalid_output: "The AI returned an incomplete result. We'll try again.",
   content_blocked: "The AI service declined to process this content.",
   media_private: "This video can't be analyzed directly from its YouTube URL.",
