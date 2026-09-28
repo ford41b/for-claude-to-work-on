@@ -1,0 +1,27 @@
+# deps
+node_modules/
+# next
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+# env
+.env
+.env.local
+.env.*.local
+!.env.example
+# tests
+coverage/
+playwright-report/
+test-results/
+blob-report/
+# supabase
+supabase/.branches
+supabase/.temp
+supabase/signing_keys.json
+# impeccable local
+.impeccable/config.local.json
+.impeccable/review/
+# misc
+.DS_Store
+*.log
