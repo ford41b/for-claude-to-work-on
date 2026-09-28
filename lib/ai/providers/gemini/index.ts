@@ -8,6 +8,7 @@ import {
   type Part,
 } from "@google/genai";
 import { AIError, type AIErrorCode } from "@/lib/ai/errors";
+import { log } from "@/lib/observability/log";
 import {
   EMBEDDING_DIMENSIONS,
   type ContentPart,
@@ -48,23 +49,39 @@ const THINKING: Record<NonNullable<GenerateRequest["thinking"]>, ThinkingLevel> 
   high: ThinkingLevel.HIGH,
 };
 
-function toPart(part: ContentPart): Part {
+function toPart(part: ContentPart, withTuning: boolean): Part {
   switch (part.type) {
     case "text":
       return { text: part.text };
     case "youtube":
       return {
         fileData: { fileUri: part.url },
-        ...(part.fps ? { videoMetadata: { fps: part.fps } } : {}),
+        ...(withTuning && part.fps ? { videoMetadata: { fps: part.fps } } : {}),
       };
     case "inline":
       return { inlineData: { mimeType: part.mimeType, data: Buffer.from(part.data).toString("base64") } };
     case "prepared":
       return {
         fileData: { fileUri: part.ref.uri, mimeType: part.ref.mimeType },
-        ...(part.fps ? { videoMetadata: { fps: part.fps } } : {}),
+        ...(withTuning && part.fps ? { videoMetadata: { fps: part.fps } } : {}),
       };
   }
+}
+
+/**
+ * Request shapes tried in order when Gemini answers 400 INVALID_ARGUMENT without saying which
+ * field it refused: first everything, then without the optional tuning (frame rate, media
+ * resolution, thinking level), then without the response schema (the prompt carries it instead
+ * and runPrompt still validates the output). A 400 is not billed, so the fallbacks cost nothing.
+ */
+type RequestShape = "full" | "no_tuning" | "no_schema";
+const SHAPES: RequestShape[] = ["full", "no_tuning", "no_schema"];
+
+/** A refusal of the request's form (not of its size, the key, or the content). */
+function isGenericInvalidArgument(err: unknown): boolean {
+  if (!(err instanceof ApiError) || err.status !== 400) return false;
+  const lower = err.message.toLowerCase();
+  return !/(token count|too long|exceeds the maximum|api key|video unavailable|private)/.test(lower);
 }
 
 /** Maps Gemini API failures onto provider-neutral codes. */
@@ -122,25 +139,7 @@ export class GeminiProvider implements ModelProvider {
     const hasYouTube = req.parts.some((p) => p.type === "youtube");
     const started = Date.now();
     try {
-      const response = await this.client.models.generateContent({
-        model,
-        contents: [{ role: "user", parts: req.parts.map(toPart) }],
-        config: {
-          systemInstruction: req.system,
-          responseMimeType: "application/json",
-          responseJsonSchema: req.responseJsonSchema,
-          ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
-          ...(req.maxOutputTokens ? { maxOutputTokens: req.maxOutputTokens } : {}),
-          ...(req.mediaResolution ? { mediaResolution: MEDIA_RESOLUTION[req.mediaResolution] } : {}),
-          ...(req.thinking ? { thinkingConfig: { thinkingLevel: THINKING[req.thinking] } } : {}),
-          ...(req.signal ? { abortSignal: req.signal } : {}),
-          httpOptions: {
-            ...(req.timeoutMs ? { timeout: req.timeoutMs } : {}),
-            // The job system owns retries; keep SDK-level retries minimal.
-            retryOptions: { attempts: 2 },
-          },
-        },
-      });
+      const response = await this.generateWithFallback(model, req);
       const blockReason = response.promptFeedback?.blockReason;
       if (blockReason) throw new AIError("content_blocked", { detail: `blockReason=${blockReason}` });
       const candidate = response.candidates?.[0];
@@ -168,6 +167,52 @@ export class GeminiProvider implements ModelProvider {
     } catch (err) {
       throw classifyGeminiError(err, { hasYouTube });
     }
+  }
+
+  private request(model: string, req: GenerateRequest, shape: RequestShape) {
+    const tuning = shape === "full";
+    const schema = shape !== "no_schema";
+    return this.client.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: req.parts.map((p) => toPart(p, tuning)) }],
+      config: {
+        systemInstruction: schema
+          ? req.system
+          : `${req.system}\n\nReturn only JSON that matches this JSON Schema:\n${JSON.stringify(req.responseJsonSchema)}`,
+        responseMimeType: "application/json",
+        ...(schema ? { responseJsonSchema: req.responseJsonSchema } : {}),
+        ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
+        ...(req.maxOutputTokens ? { maxOutputTokens: req.maxOutputTokens } : {}),
+        ...(tuning && req.mediaResolution ? { mediaResolution: MEDIA_RESOLUTION[req.mediaResolution] } : {}),
+        ...(tuning && req.thinking ? { thinkingConfig: { thinkingLevel: THINKING[req.thinking] } } : {}),
+        ...(req.signal ? { abortSignal: req.signal } : {}),
+        httpOptions: {
+          ...(req.timeoutMs ? { timeout: req.timeoutMs } : {}),
+          // The job system owns retries; keep SDK-level retries minimal.
+          retryOptions: { attempts: 2 },
+        },
+      },
+    });
+  }
+
+  private async generateWithFallback(model: string, req: GenerateRequest) {
+    const refusals: string[] = [];
+    for (const shape of SHAPES) {
+      try {
+        const response = await this.request(model, req, shape);
+        if (refusals.length) {
+          log.warn("gemini.request_fallback", { model, prompt: req.trace.promptId, shape, refused: refusals.join(" | ").slice(0, 1500) });
+        }
+        return response;
+      } catch (err) {
+        if (!isGenericInvalidArgument(err) || shape === SHAPES[SHAPES.length - 1]) {
+          if (refusals.length && err instanceof Error) err.message = `${err.message} (after fallbacks: ${refusals.join(" | ")})`;
+          throw err;
+        }
+        refusals.push(`${shape}: ${(err as Error).message}`.slice(0, 600));
+      }
+    }
+    throw new Error("unreachable");
   }
 
   async embed(req: EmbedRequest): Promise<EmbedResponse> {

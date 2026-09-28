@@ -7,7 +7,7 @@ import { sermonPackPrompt, sermonPackSchema } from "@/lib/ai/prompts/sermon-pack
 import { PROMPT_REGISTRY } from "@/lib/ai/service";
 import { toProviderSchema } from "@/lib/ai/schema";
 import { extractJson, runPrompt } from "@/lib/ai/structured";
-import { classifyGeminiError } from "@/lib/ai/providers/gemini";
+import { classifyGeminiError, GeminiProvider } from "@/lib/ai/providers/gemini";
 import { FixtureProvider } from "@/lib/ai/providers/fixture";
 import type { GenerateRequest, GenerateResponse, ModelProvider } from "@/lib/ai/types";
 
@@ -156,5 +156,60 @@ describe("classifyGeminiError", () => {
     expect(classifyGeminiError(api(503, "The model is overloaded"), { hasYouTube: false })).toMatchObject({ code: "unavailable", retryable: true });
     expect(classifyGeminiError(api(401, "API key not valid"), { hasYouTube: false })).toMatchObject({ code: "auth_failed", retryable: false });
     expect(classifyGeminiError(new AIError("content_blocked"), { hasYouTube: false }).code).toBe("content_blocked");
+  });
+});
+
+describe("GeminiProvider request fallback", () => {
+  const request: GenerateRequest = {
+    tier: "media",
+    system: "Analyze.",
+    parts: [{ type: "youtube", url: "https://www.youtube.com/watch?v=abc", fps: 0.5 }, { type: "text", text: "Go" }],
+    responseJsonSchema: { type: "object", properties: { ok: { type: "boolean" } } },
+    mediaResolution: "low",
+    thinking: "low",
+    trace: { promptId: "sermon-analysis", promptVersion: "test" },
+  };
+  const invalid = () => new ApiError({ status: 400, message: '{"error":{"code":400,"message":"Request contains an invalid argument.","status":"INVALID_ARGUMENT"}}' });
+  const ok = { text: '{"ok":true}', candidates: [{ finishReason: "STOP" }], usageMetadata: {} };
+
+  function providerWith(responses: Array<() => unknown>) {
+    const provider = new GeminiProvider({ apiKey: "test", models: { media: "m", synthesis: "m", fast: "m" }, embeddingModel: "e" });
+    const calls: Array<Record<string, unknown>> = [];
+    (provider as unknown as { client: unknown }).client = {
+      models: {
+        generateContent: async (args: Record<string, unknown>) => {
+          calls.push(args);
+          return responses[calls.length - 1]!();
+        },
+      },
+    };
+    return { provider, calls };
+  }
+
+  it("retries an invalid-argument refusal without the optional tuning", async () => {
+    const { provider, calls } = providerWith([() => { throw invalid(); }, () => ok]);
+    await expect(provider.generate(request)).resolves.toMatchObject({ text: '{"ok":true}' });
+    expect(calls).toHaveLength(2);
+    const second = calls[1] as { config: Record<string, unknown>; contents: Array<{ parts: Array<Record<string, unknown>> }> };
+    expect(second.config.mediaResolution).toBeUndefined();
+    expect(second.config.thinkingConfig).toBeUndefined();
+    expect(second.contents[0]!.parts[0]!.videoMetadata).toBeUndefined();
+    expect(second.config.responseJsonSchema).toBeDefined();
+  });
+
+  it("finally moves the schema into the prompt, then reports a rejected request", async () => {
+    const { provider, calls } = providerWith([() => { throw invalid(); }, () => { throw invalid(); }, () => { throw invalid(); }]);
+    await expect(provider.generate(request)).rejects.toMatchObject({ code: "request_rejected", retryable: false });
+    expect(calls).toHaveLength(3);
+    const third = calls[2] as { config: Record<string, unknown> };
+    expect(third.config.responseJsonSchema).toBeUndefined();
+    expect(String(third.config.systemInstruction)).toContain("JSON Schema");
+  });
+
+  it("does not fall back for errors that are not about the request's form", async () => {
+    const tooLong = () => { throw new ApiError({ status: 400, message: "The input token count (2000000) exceeds the maximum number of tokens allowed (1048576)." }); };
+    const { provider, calls } = providerWith([tooLong]);
+    await expect(provider.generate(request)).rejects.toMatchObject({ code: "media_too_long" });
+    expect(calls).toHaveLength(1);
   });
 });
