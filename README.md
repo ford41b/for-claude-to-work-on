@@ -115,6 +115,7 @@ What each status means:
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Topologies, Supabase, web, worker, launch checklist |
 | [docs/API_LIMITATIONS.md](docs/API_LIMITATIONS.md) | External API limits, data-use terms, what we deliberately don't do |
 | [PRODUCT.md](PRODUCT.md) | Product context and principles |
+| [DESIGN.md](DESIGN.md) | Visual system: tokens, type, layout, components, named rules |
 
 ## Privacy
 
