@@ -52,10 +52,22 @@ test.describe("North-star flow", () => {
     const noteChip = page.getByRole("link", { name: /Your note/ }).first();
     await expect(noteChip).toHaveAttribute("href", /\/notes#block-/);
 
+    // Correct an AI main idea; the correction is marked as the listener's.
+    await page.getByRole("button", { name: "Correct main idea" }).first().click();
+    await page.getByLabel("Main idea", { exact: true }).fill("Waiting is trust with its sleeves rolled up");
+    await page.getByRole("button", { name: "Save correction" }).click();
+    await expect(page.getByRole("heading", { name: /Waiting is trust with its sleeves rolled up/ })).toBeVisible();
+    await expect(page.getByText("edited by you").first()).toBeVisible();
+
     // Sermon tab: verbatim quotes carry evidence; paraphrases are labeled.
     await page.getByRole("link", { name: "Sermon", exact: true }).click();
     await expect(page.getByText("Paraphrase").first()).toBeVisible();
     await expect(page.getByText(/Heard word-for-word/).first()).toBeVisible();
+    // Hiding an item is undoable.
+    await page.getByRole("button", { name: "Hide paraphrase" }).first().click();
+    await expect(page.getByText("Paraphrase hidden.")).toBeVisible();
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.getByText("Paraphrase", { exact: true }).first()).toBeVisible();
     await shot(page, testInfo, "05-sermon-tab");
 
     // Ask AI with citations.

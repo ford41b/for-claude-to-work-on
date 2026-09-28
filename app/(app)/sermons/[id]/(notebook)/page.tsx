@@ -2,6 +2,7 @@ import { BookOpen, CircleHelp, Image as ImageIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ProcessingStages } from "@/components/sermon/processing";
+import { ItemCorrection } from "@/components/sermon/item-correction";
 import { RebuildButton } from "@/components/sermon/rebuild-button";
 import { NotebookSection } from "@/components/sermon/section";
 import { MomentLog, SermonRibbon, type TimelineMoment } from "@/components/sermon/timeline";
@@ -147,6 +148,15 @@ export default async function OverviewPage({ params }: { params: Promise<{ id: s
                         </p>
                       ) : null}
                       <SourceList citations={chips(citationsFor(citations, "main_idea", idea.id))} sermonId={id} className="mt-3" />
+                      <ItemCorrection
+                        table="main_ideas"
+                        id={idea.id}
+                        itemLabel="Main idea"
+                        fields={[
+                          { name: "title", label: "Main idea", value: idea.title },
+                          { name: "summary", label: "Summary", value: idea.summary ?? "", multiline: true },
+                        ]}
+                      />
                     </div>
                   </li>
                 ))}

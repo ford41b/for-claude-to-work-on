@@ -69,7 +69,7 @@ What each status means:
 | Sermon Pack | **Done, not live-verified** | Big idea, summaries, main ideas, outline, timeline, Scripture, quotes (verbatim vs paraphrase), illustrations, applications, questions, terms, review items; every item cited |
 | Citation, quote and timestamp enforcement | Done | Resolver drops unknown keys, requires evidence for verbatim quotes, derives times from evidence; adversarial eval suite |
 | User edits survive rebuilds | Done | Integration test |
-| Correcting AI output in the UI | **Partial** | UI exists for Scripture (edit, hide, add), timeline times, photo transcriptions, review items and applications. Main ideas, sections, quotes, illustrations and terms are editable through the API (`PATCH /api/pack-items/...`) but have no UI yet. |
+| Correcting AI output in the UI | Done | Correct or hide main ideas, outline sections, stories and term definitions; hide quotes (their words stay tied to evidence); edit, hide and add Scripture; correct timeline times and photo transcriptions. Corrections are labeled "edited by you" and survive rebuilds. |
 | Ask AI | **Done, not live-verified** | Hybrid retrieval (full text + pgvector, RRF); streamed stages; validated `[K#]` citations that jump to the source; says when the sermon doesn't cover something; general context kept separate |
 | Bible study (8 formats) | **Done, not live-verified** | Cited sections; no verse text without a licensed provider |
 | Review items and "This week" | Done | Review states without scoring; applications with completion |

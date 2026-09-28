@@ -48,7 +48,7 @@ the fixture AI provider and `YOUTUBE_METADATA=off`.
 
 | Test | Flow |
 |---|---|
-| North-star flow | Sign up → paste an invalid link (inline error), then a valid one → type notes (local-first "Saved") → upload a slide photo → Finish (with the disclosure dialog) → staged processing → Sermon Pack (big idea, main ideas, timeline, Scripture, source chips; a note citation deep-links to its block) → Sermon tab (verbatim evidence vs paraphrase labels) → Ask AI with citations → Bible study → library search by note text and by passage → delete |
+| North-star flow | Sign up → paste an invalid link (inline error), then a valid one → type notes (local-first "Saved") → upload a slide photo → Finish (with the disclosure dialog) → staged processing → Sermon Pack (big idea, main ideas, timeline, Scripture, source chips; a note citation deep-links to its block) → correct a main idea ("edited by you") → Sermon tab (verbatim evidence vs paraphrase labels; hide and undo) → Ask AI with citations → Bible study → library search by note text and by passage → delete |
 | Uploaded recording | Rights confirmation → resumable upload of a WAV file → pack → a timestamp chip seeks the `<audio>` element |
 | Private YouTube video | The fixture's private-video id → the source is shown as unavailable, with both fallbacks |
 | Sunday Mode offline | Go offline → type a note and bookmark a moment ("Saved on this device") → back online → both sync, and the note and capture appear in the notebook |

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ItemCorrection } from "@/components/sermon/item-correction";
 import { NotebookSection } from "@/components/sermon/section";
 import { MomentLog, SermonRibbon, type TimelineMoment } from "@/components/sermon/timeline";
 import { SourceList, TimeLink, VoiceTag } from "@/components/sources/source-chip";
@@ -100,9 +101,21 @@ export default async function SermonTabPage({ params }: { params: Promise<{ id: 
               <li key={s.id} className="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-x-3">
                 <div className="pt-0.5 text-sm">{s.timestamp_start !== null ? <TimeLink seconds={s.timestamp_start} approximate /> : <span className="text-ink-muted">{i + 1}.</span>}</div>
                 <div>
-                  <h3 className="font-bold leading-snug">{s.title}</h3>
+                  <h3 className="font-bold leading-snug">
+                    {s.title}
+                    {s.user_edited ? <EditedByYou /> : null}
+                  </h3>
                   {s.summary ? <p className="reading mt-1 leading-relaxed text-ink">{s.summary}</p> : null}
                   <SourceList citations={citationsFor(citations, "section", s.id)} sermonId={id} className="mt-2" />
+                  <ItemCorrection
+                    table="sermon_sections"
+                    id={s.id}
+                    itemLabel="Section"
+                    fields={[
+                      { name: "title", label: "Section title", value: s.title },
+                      { name: "summary", label: "Summary", value: s.summary ?? "", multiline: true },
+                    ]}
+                  />
                 </div>
               </li>
             ))}
@@ -137,6 +150,7 @@ export default async function SermonTabPage({ params }: { params: Promise<{ id: 
                   </div>
                 )}
                 <SourceList citations={citationsFor(citations, "quote", q.id)} sermonId={id} className="mt-2" />
+                <ItemCorrection table="quotes" id={q.id} itemLabel={q.quote_type === "VERBATIM_QUOTE" ? "Quote" : "Paraphrase"} />
               </li>
             ))}
           </ul>
@@ -148,9 +162,21 @@ export default async function SermonTabPage({ params }: { params: Promise<{ id: 
           <ul className="flex flex-col gap-4">
             {pack.illustrations.map((ill) => (
               <li key={ill.id}>
-                <h3 className="font-bold">{ill.title}</h3>
+                <h3 className="font-bold">
+                  {ill.title}
+                  {ill.user_edited ? <EditedByYou /> : null}
+                </h3>
                 {ill.summary ? <p className="mt-0.5 text-ink-muted">{ill.summary}</p> : null}
                 <SourceList citations={citationsFor(citations, "illustration", ill.id)} sermonId={id} className="mt-2" />
+                <ItemCorrection
+                  table="illustrations"
+                  id={ill.id}
+                  itemLabel="Story"
+                  fields={[
+                    { name: "title", label: "Title", value: ill.title },
+                    { name: "summary", label: "Summary", value: ill.summary ?? "", multiline: true },
+                  ]}
+                />
               </li>
             ))}
           </ul>
@@ -162,8 +188,14 @@ export default async function SermonTabPage({ params }: { params: Promise<{ id: 
           <dl className="flex flex-col gap-3">
             {pack.terms.map((t) => (
               <div key={t.id}>
-                <dt className="font-bold">{t.term}</dt>
-                <dd className="text-ink-muted">{t.definition}</dd>
+                <dt className="font-bold">
+                  {t.term}
+                  {t.user_edited ? <EditedByYou /> : null}
+                </dt>
+                <dd className="text-ink-muted">
+                  {t.definition}
+                  <ItemCorrection table="terms" id={t.id} itemLabel="Term" fields={[{ name: "definition", label: `Definition of “${t.term}”`, value: t.definition ?? "", multiline: true }]} />
+                </dd>
               </div>
             ))}
           </dl>
@@ -171,4 +203,8 @@ export default async function SermonTabPage({ params }: { params: Promise<{ id: 
       ) : null}
     </div>
   );
+}
+
+function EditedByYou() {
+  return <span className="ml-2 align-middle text-xs font-semibold text-pen">edited by you</span>;
 }
