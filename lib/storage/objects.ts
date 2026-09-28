@@ -58,8 +58,10 @@ export async function downloadToTempFile(
   objectPathValue: string,
   filename: string,
 ): Promise<{ filePath: string; cleanup: () => Promise<void> }> {
-  const dir = await mkdtemp(path.join(tmpdir(), "sermon-media-"));
-  const filePath = path.join(dir, filename.replace(/[^\w.-]+/g, "_") || "media");
+  // Runtime temp paths: tell Turbopack's file tracer not to treat them as project files, or it
+  // bundles the whole repository into the server output.
+  const dir = await mkdtemp(path.join(/* turbopackIgnore: true */ tmpdir(), "sermon-media-"));
+  const filePath = path.join(/* turbopackIgnore: true */ dir, filename.replace(/[^\w.-]+/g, "_") || "media");
   const cleanup = () => rm(dir, { recursive: true, force: true });
   try {
     const url = await signedUrl(bucket, objectPathValue, 3600);
