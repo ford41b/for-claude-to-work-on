@@ -8,6 +8,8 @@ import { serverEnv } from "@/lib/config/env";
  */
 
 type Sql = postgres.Sql<{ bigint: number }>;
+/** A plain connection or a transaction handle. */
+type SqlLike = Sql | postgres.TransactionSql<{ bigint: number }>;
 
 const globalForDb = globalThis as unknown as { __sermonSql?: Sql };
 
@@ -43,4 +45,4 @@ export async function closeDb() {
   }
 }
 
-export type { Sql };
+export type { Sql, SqlLike };

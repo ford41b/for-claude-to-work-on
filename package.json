@@ -15,7 +15,7 @@
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "test:e2e": "playwright test",
-    "worker": "tsx scripts/worker.ts",
+    "worker": "tsx --conditions=react-server scripts/worker.ts",
     "db:start": "supabase start -x realtime,studio,edge-runtime,logflare,vector,imgproxy,supavisor",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",

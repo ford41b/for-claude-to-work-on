@@ -28,6 +28,8 @@ const serverSchema = z.object({
   GEMINI_MODEL_FAST: z.string().default("gemini-3.1-flash-lite"),
   GEMINI_EMBEDDING_MODEL: z.string().default("gemini-embedding-001"),
   YOUTUBE_API_KEY: optionalString,
+  /** "off" skips network metadata lookups (tests, offline development). */
+  YOUTUBE_METADATA: z.enum(["auto", "off"]).default("auto"),
   BIBLE_PROVIDER: z.enum(["none", "api_bible"]).default("none"),
   API_BIBLE_KEY: optionalString,
   API_BIBLE_BIBLE_ID: optionalString,

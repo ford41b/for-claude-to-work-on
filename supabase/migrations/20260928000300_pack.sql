@@ -55,6 +55,8 @@ create table public.main_ideas (
   title text not null check (char_length(title) <= 300),
   summary text not null default '',
   explanation text not null default '',
+  -- Normalized references (display form) supporting this idea; validated by the Scripture engine.
+  scripture_refs text[] not null default '{}',
   timestamp_start double precision check (timestamp_start is null or timestamp_start >= 0),
   timestamp_end double precision check (timestamp_end is null or timestamp_end >= 0),
   timestamp_confidence public.confidence_level,
