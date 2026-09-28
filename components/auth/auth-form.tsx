@@ -23,11 +23,26 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [sent, setSent] = useState(false);
+
+  // The submit button stays enabled; problems are explained next to the field instead.
+  function validate(): boolean {
+    const errors: { email?: string; password?: string } = {};
+    if (!email.trim()) errors.email = "Enter your email address.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errors.email = "That doesn't look like an email address.";
+    if (method === "password") {
+      if (!password) errors.password = mode === "sign-up" ? "Choose a password of at least 8 characters." : "Enter your password.";
+      else if (mode === "sign-up" && password.length < 8) errors.password = "Use at least 8 characters.";
+    }
+    setFieldErrors(errors);
+    return !errors.email && !errors.password;
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!validate()) return;
     setBusy(true);
     const supabase = getSupabaseBrowserClient();
     try {
@@ -112,11 +127,21 @@ export function AuthForm({ mode }: { mode: Mode }) {
           <Input id="name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
         </Field>
       ) : null}
-      <Field label="Email" htmlFor="email">
-        <Input id="email" type="email" inputMode="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+      <Field label="Email" htmlFor="email" error={fieldErrors.email}>
+        <Input
+          id="email"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          aria-invalid={Boolean(fieldErrors.email)}
+          aria-describedby={fieldErrors.email ? "email-error" : undefined}
+        />
       </Field>
       {method === "password" ? (
-        <Field label="Password" htmlFor="password" hint={mode === "sign-up" ? "At least 8 characters." : undefined}>
+        <Field label="Password" htmlFor="password" hint={mode === "sign-up" ? "At least 8 characters." : undefined} error={fieldErrors.password}>
           <Input
             id="password"
             type="password"
@@ -125,11 +150,13 @@ export function AuthForm({ mode }: { mode: Mode }) {
             minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            aria-invalid={Boolean(fieldErrors.password)}
+            aria-describedby={fieldErrors.password ? "password-error" : mode === "sign-up" ? "password-hint" : undefined}
           />
         </Field>
       ) : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
-      <Button type="submit" variant="primary" size="lg" loading={busy} disabled={!email || (method === "password" && password.length < 8)}>
+      <Button type="submit" variant="primary" size="lg" loading={busy}>
         {method === "link" ? "Send link" : mode === "sign-up" ? "Create account" : "Sign in"}
       </Button>
     </form>

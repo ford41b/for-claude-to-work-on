@@ -93,7 +93,7 @@ export function SermonRibbon({ duration, sections, moments }: { duration: number
           ))}
         {now !== null ? <div className="absolute inset-y-0 w-0.5 bg-pen" style={{ left: pct(now) }} /> : null}
       </div>
-      <div className="mt-1 flex justify-between font-mono text-[0.7rem] text-ink-muted tabular">
+      <div className="mt-1 flex justify-between font-mono text-2xs text-ink-muted tabular">
         <span>0:00</span>
         <span>{formatTimestamp(total)}</span>
       </div>
@@ -188,8 +188,8 @@ export function MomentLog({ moments, sermonId, limit }: { moments: TimelineMomen
           <li key={m.id} className="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-x-3 border-b border-rule py-3 last:border-b-0">
             <div className="pt-0.5 text-sm">
               {m.start !== null ? <TimeLink seconds={m.start} approximate={approximate} /> : <span className="font-mono text-ink-muted">—</span>}
-              {m.timestampSource === "user_correction" ? <p className="mt-0.5 text-[0.7rem] font-semibold text-ink-muted">corrected</p> : null}
-              {approximate && m.confidence === "low" ? <p className="mt-0.5 text-[0.7rem] text-ink-muted">time unsure</p> : null}
+              {m.timestampSource === "user_correction" ? <p className="mt-0.5 text-2xs font-semibold text-ink-muted">corrected</p> : null}
+              {approximate && m.confidence === "low" ? <p className="mt-0.5 text-2xs text-ink-muted">time unsure</p> : null}
             </div>
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 label-caps">

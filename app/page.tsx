@@ -48,7 +48,7 @@ export default function LandingPage() {
           <p className="mt-6 text-sm text-ink-muted">Private by default. Your own words are never rewritten.</p>
         </div>
 
-        <figure className="rounded-[18px] border border-rule bg-paper-raised p-5 shadow-[var(--shadow-float)] sm:p-7">
+        <figure className="rounded-[18px] border border-rule-strong bg-paper-raised p-5 sm:p-7">
           <figcaption className="label-caps">Example notebook entry</figcaption>
           <p className="mt-4 label-caps">Main idea</p>
           <p className="reading mt-1 text-xl font-semibold leading-snug">Waiting can be an active expression of trust.</p>

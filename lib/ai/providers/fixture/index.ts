@@ -90,6 +90,10 @@ function normalize(v: number[]): number[] {
   return n > 0 ? v.map((x) => x / n) : v;
 }
 
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function firstSentence(text: string, max = 140): string {
   const s = text.split(/(?<=[.!?])\s/)[0] ?? text;
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
@@ -106,7 +110,7 @@ function buildPack(input: SermonPackInput): SermonPackDraft {
   const noteKey = notes[0]?.key;
   const photoKey = photos[0]?.key;
   const main_ideas = ideaSources.slice(0, 5).map((u, i) => ({
-    title: firstSentence(u.text.replace(/^(First|Second|Third) point:\s*/i, ""), 90).replace(/\.$/, ""),
+    title: capitalize(firstSentence(u.text.replace(/^(First|Second|Third) point:\s*/i, ""), 90).replace(/\.$/, "")),
     summary: firstSentence(u.text, 300),
     explanation: `The sermon develops this idea in ${u.label.toLowerCase()}.`,
     scripture: [] as string[],

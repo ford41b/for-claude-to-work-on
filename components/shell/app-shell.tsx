@@ -26,7 +26,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr]">
       <aside className="sticky top-0 hidden h-dvh flex-col gap-6 border-r border-rule px-4 py-6 md:flex">
-        <Link href="/home" className="flex items-center gap-2 px-2 text-[0.95rem] font-bold tracking-tight">
+        <Link href="/home" className="flex items-center gap-2 px-2 text-[0.9375rem] font-bold tracking-tight">
           <BookOpen className="size-5 text-pen" aria-hidden="true" />
           {APP_NAME}
         </Link>

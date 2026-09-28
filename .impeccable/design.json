@@ -1,0 +1,525 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-28T03:16:38Z",
+  "title": "Design System: Sermon Notebook",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Notebook Paper",
+        "canonical": "oklch(0.972 0.006 80)",
+        "tonalRamp": [
+          "oklch(0.15 0.006 80.0)",
+          "oklch(0.264 0.006 80.0)",
+          "oklch(0.379 0.006 80.0)",
+          "oklch(0.493 0.006 80.0)",
+          "oklch(0.607 0.006 80.0)",
+          "oklch(0.721 0.006 80.0)",
+          "oklch(0.836 0.006 80.0)",
+          "oklch(0.95 0.006 80.0)"
+        ]
+      },
+      "paper-raised": {
+        "role": "neutral",
+        "displayName": "Fresh Sheet",
+        "canonical": "oklch(0.992 0.003 80)",
+        "tonalRamp": [
+          "oklch(0.15 0.003 80.0)",
+          "oklch(0.264 0.003 80.0)",
+          "oklch(0.379 0.003 80.0)",
+          "oklch(0.493 0.003 80.0)",
+          "oklch(0.607 0.003 80.0)",
+          "oklch(0.721 0.003 80.0)",
+          "oklch(0.836 0.003 80.0)",
+          "oklch(0.95 0.003 80.0)"
+        ]
+      },
+      "paper-sunk": {
+        "role": "neutral",
+        "displayName": "Sunk Paper",
+        "canonical": "oklch(0.944 0.008 78)",
+        "tonalRamp": [
+          "oklch(0.15 0.008 78.0)",
+          "oklch(0.264 0.008 78.0)",
+          "oklch(0.379 0.008 78.0)",
+          "oklch(0.493 0.008 78.0)",
+          "oklch(0.607 0.008 78.0)",
+          "oklch(0.721 0.008 78.0)",
+          "oklch(0.836 0.008 78.0)",
+          "oklch(0.95 0.008 78.0)"
+        ]
+      },
+      "paper-deep": {
+        "role": "neutral",
+        "displayName": "Deep Paper",
+        "canonical": "oklch(0.915 0.01 76)",
+        "tonalRamp": [
+          "oklch(0.15 0.01 76.0)",
+          "oklch(0.264 0.01 76.0)",
+          "oklch(0.379 0.01 76.0)",
+          "oklch(0.493 0.01 76.0)",
+          "oklch(0.607 0.01 76.0)",
+          "oklch(0.721 0.01 76.0)",
+          "oklch(0.836 0.01 76.0)",
+          "oklch(0.95 0.01 76.0)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.235 0.012 60)",
+        "tonalRamp": [
+          "oklch(0.15 0.012 60.0)",
+          "oklch(0.264 0.012 60.0)",
+          "oklch(0.379 0.012 60.0)",
+          "oklch(0.493 0.012 60.0)",
+          "oklch(0.607 0.012 60.0)",
+          "oklch(0.721 0.012 60.0)",
+          "oklch(0.836 0.012 60.0)",
+          "oklch(0.95 0.012 60.0)"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Faded Ink",
+        "canonical": "oklch(0.44 0.012 62)",
+        "tonalRamp": [
+          "oklch(0.15 0.012 62.0)",
+          "oklch(0.264 0.012 62.0)",
+          "oklch(0.379 0.012 62.0)",
+          "oklch(0.493 0.012 62.0)",
+          "oklch(0.607 0.012 62.0)",
+          "oklch(0.721 0.012 62.0)",
+          "oklch(0.836 0.012 62.0)",
+          "oklch(0.95 0.012 62.0)"
+        ]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Pencil",
+        "canonical": "oklch(0.53 0.01 65)",
+        "tonalRamp": [
+          "oklch(0.15 0.01 65.0)",
+          "oklch(0.264 0.01 65.0)",
+          "oklch(0.379 0.01 65.0)",
+          "oklch(0.493 0.01 65.0)",
+          "oklch(0.607 0.01 65.0)",
+          "oklch(0.721 0.01 65.0)",
+          "oklch(0.836 0.01 65.0)",
+          "oklch(0.95 0.01 65.0)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(0.875 0.008 72)",
+        "tonalRamp": [
+          "oklch(0.15 0.008 72.0)",
+          "oklch(0.264 0.008 72.0)",
+          "oklch(0.379 0.008 72.0)",
+          "oklch(0.493 0.008 72.0)",
+          "oklch(0.607 0.008 72.0)",
+          "oklch(0.721 0.008 72.0)",
+          "oklch(0.836 0.008 72.0)",
+          "oklch(0.95 0.008 72.0)"
+        ]
+      },
+      "rule-strong": {
+        "role": "neutral",
+        "displayName": "Ruled Line",
+        "canonical": "oklch(0.77 0.01 70)",
+        "tonalRamp": [
+          "oklch(0.15 0.01 70.0)",
+          "oklch(0.264 0.01 70.0)",
+          "oklch(0.379 0.01 70.0)",
+          "oklch(0.493 0.01 70.0)",
+          "oklch(0.607 0.01 70.0)",
+          "oklch(0.721 0.01 70.0)",
+          "oklch(0.836 0.01 70.0)",
+          "oklch(0.95 0.01 70.0)"
+        ]
+      },
+      "field": {
+        "role": "neutral",
+        "displayName": "Field Edge",
+        "canonical": "oklch(0.64 0.01 70)",
+        "tonalRamp": [
+          "oklch(0.15 0.01 70.0)",
+          "oklch(0.264 0.01 70.0)",
+          "oklch(0.379 0.01 70.0)",
+          "oklch(0.493 0.01 70.0)",
+          "oklch(0.607 0.01 70.0)",
+          "oklch(0.721 0.01 70.0)",
+          "oklch(0.836 0.01 70.0)",
+          "oklch(0.95 0.01 70.0)"
+        ]
+      },
+      "pen": {
+        "role": "primary",
+        "displayName": "Pen Ink",
+        "canonical": "oklch(0.45 0.135 262)",
+        "tonalRamp": [
+          "oklch(0.15 0.135 262.0)",
+          "oklch(0.264 0.135 262.0)",
+          "oklch(0.379 0.135 262.0)",
+          "oklch(0.493 0.135 262.0)",
+          "oklch(0.607 0.135 262.0)",
+          "oklch(0.721 0.135 262.0)",
+          "oklch(0.836 0.135 262.0)",
+          "oklch(0.95 0.135 262.0)"
+        ]
+      },
+      "pen-strong": {
+        "role": "primary",
+        "displayName": "Pen Ink Pressed",
+        "canonical": "oklch(0.39 0.14 262)",
+        "tonalRamp": [
+          "oklch(0.15 0.14 262.0)",
+          "oklch(0.264 0.14 262.0)",
+          "oklch(0.379 0.14 262.0)",
+          "oklch(0.493 0.14 262.0)",
+          "oklch(0.607 0.14 262.0)",
+          "oklch(0.721 0.14 262.0)",
+          "oklch(0.836 0.14 262.0)",
+          "oklch(0.95 0.14 262.0)"
+        ]
+      },
+      "pen-wash": {
+        "role": "primary",
+        "displayName": "Pen Wash",
+        "canonical": "oklch(0.935 0.03 262)",
+        "tonalRamp": [
+          "oklch(0.15 0.03 262.0)",
+          "oklch(0.264 0.03 262.0)",
+          "oklch(0.379 0.03 262.0)",
+          "oklch(0.493 0.03 262.0)",
+          "oklch(0.607 0.03 262.0)",
+          "oklch(0.721 0.03 262.0)",
+          "oklch(0.836 0.03 262.0)",
+          "oklch(0.95 0.03 262.0)"
+        ]
+      },
+      "on-pen": {
+        "role": "primary",
+        "displayName": "On Pen",
+        "canonical": "oklch(0.985 0.004 262)",
+        "tonalRamp": [
+          "oklch(0.15 0.004 262.0)",
+          "oklch(0.264 0.004 262.0)",
+          "oklch(0.379 0.004 262.0)",
+          "oklch(0.493 0.004 262.0)",
+          "oklch(0.607 0.004 262.0)",
+          "oklch(0.721 0.004 262.0)",
+          "oklch(0.836 0.004 262.0)",
+          "oklch(0.95 0.004 262.0)"
+        ]
+      },
+      "highlighter": {
+        "role": "accent",
+        "displayName": "Highlighter",
+        "canonical": "oklch(0.92 0.075 96)",
+        "tonalRamp": [
+          "oklch(0.15 0.075 96.0)",
+          "oklch(0.264 0.075 96.0)",
+          "oklch(0.379 0.075 96.0)",
+          "oklch(0.493 0.075 96.0)",
+          "oklch(0.607 0.075 96.0)",
+          "oklch(0.721 0.075 96.0)",
+          "oklch(0.836 0.075 96.0)",
+          "oklch(0.95 0.075 96.0)"
+        ]
+      },
+      "danger": {
+        "role": "status",
+        "displayName": "Correction Red",
+        "canonical": "oklch(0.5 0.16 28)",
+        "tonalRamp": [
+          "oklch(0.15 0.16 28.0)",
+          "oklch(0.264 0.16 28.0)",
+          "oklch(0.379 0.16 28.0)",
+          "oklch(0.493 0.16 28.0)",
+          "oklch(0.607 0.16 28.0)",
+          "oklch(0.721 0.16 28.0)",
+          "oklch(0.836 0.16 28.0)",
+          "oklch(0.95 0.16 28.0)"
+        ]
+      },
+      "danger-wash": {
+        "role": "status",
+        "displayName": "Correction Wash",
+        "canonical": "oklch(0.95 0.025 28)",
+        "tonalRamp": [
+          "oklch(0.15 0.025 28.0)",
+          "oklch(0.264 0.025 28.0)",
+          "oklch(0.379 0.025 28.0)",
+          "oklch(0.493 0.025 28.0)",
+          "oklch(0.607 0.025 28.0)",
+          "oklch(0.721 0.025 28.0)",
+          "oklch(0.836 0.025 28.0)",
+          "oklch(0.95 0.025 28.0)"
+        ]
+      },
+      "caution": {
+        "role": "status",
+        "displayName": "Caution Ochre",
+        "canonical": "oklch(0.5 0.1 70)",
+        "tonalRamp": [
+          "oklch(0.15 0.1 70.0)",
+          "oklch(0.264 0.1 70.0)",
+          "oklch(0.379 0.1 70.0)",
+          "oklch(0.493 0.1 70.0)",
+          "oklch(0.607 0.1 70.0)",
+          "oklch(0.721 0.1 70.0)",
+          "oklch(0.836 0.1 70.0)",
+          "oklch(0.95 0.1 70.0)"
+        ]
+      },
+      "caution-wash": {
+        "role": "status",
+        "displayName": "Caution Wash",
+        "canonical": "oklch(0.95 0.035 85)",
+        "tonalRamp": [
+          "oklch(0.15 0.035 85.0)",
+          "oklch(0.264 0.035 85.0)",
+          "oklch(0.379 0.035 85.0)",
+          "oklch(0.493 0.035 85.0)",
+          "oklch(0.607 0.035 85.0)",
+          "oklch(0.721 0.035 85.0)",
+          "oklch(0.836 0.035 85.0)",
+          "oklch(0.95 0.035 85.0)"
+        ]
+      },
+      "ok": {
+        "role": "status",
+        "displayName": "Margin Green",
+        "canonical": "oklch(0.48 0.09 150)",
+        "tonalRamp": [
+          "oklch(0.15 0.09 150.0)",
+          "oklch(0.264 0.09 150.0)",
+          "oklch(0.379 0.09 150.0)",
+          "oklch(0.493 0.09 150.0)",
+          "oklch(0.607 0.09 150.0)",
+          "oklch(0.721 0.09 150.0)",
+          "oklch(0.836 0.09 150.0)",
+          "oklch(0.95 0.09 150.0)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "Sermon title in the notebook header."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Main-idea and outline titles."
+      },
+      "reading": {
+        "displayName": "Reading",
+        "purpose": "Content people read: big idea, summaries, quotes, answers, notes."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "UI text, descriptions, forms."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Printed field names and section headings (uppercase)."
+      },
+      "time": {
+        "displayName": "Time",
+        "purpose": "Every timestamp and range (tabular)."
+      },
+      "display": {
+        "displayName": "Display",
+        "purpose": "Landing headline only."
+      },
+      "big-idea": {
+        "displayName": "Big Idea",
+        "purpose": "The sermon's big idea on the overview."
+      },
+      "control": {
+        "displayName": "Control",
+        "purpose": "Button labels, tabs, navigation."
+      },
+      "display-compact": {
+        "displayName": "Display (phones)",
+        "purpose": "Landing headline below 640px."
+      }
+    },
+    "shadows": [
+      {
+        "name": "float",
+        "value": "0 10px 28px -14px rgb(40 30 20 / 0.35), 0 2px 6px -2px rgb(40 30 20 / 0.12)",
+        "purpose": "Toasts, the Ask AI composer, editor popovers."
+      },
+      {
+        "name": "sheet",
+        "value": "0 -8px 30px -12px rgb(40 30 20 / 0.28), 0 -1px 0 rgb(40 30 20 / 0.04)",
+        "purpose": "Bottom sheets."
+      },
+      {
+        "name": "button-lip",
+        "value": "0 1px 0 rgb(0 0 0 / 0.08)",
+        "purpose": "Primary buttons only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-quart",
+        "value": "cubic-bezier(0.25, 1, 0.5, 1)",
+        "purpose": "Sheets, toasts, the note-block flash."
+      },
+      {
+        "name": "state",
+        "value": "150ms ease-out",
+        "purpose": "Color and border changes on hover/focus."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce → animations ~0ms",
+        "purpose": "Global override."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ],
+    "themes": {
+      "dark": "Same properties redefined under prefers-color-scheme: dark and [data-theme=dark].",
+      "sunday": "[data-surface=sunday] low-luminance palette for Sunday Mode regardless of theme."
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled action per view: Finish sermon, Create Bible study, Save correction.",
+      "html": "<button class=\"ds-btn-primary\">Finish sermon</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 16px;border:0;border-radius:10px;background:var(--pen);color:var(--on-pen);font:600 0.9375rem/1 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif;box-shadow:0 1px 0 rgb(0 0 0/.08);transition:background-color .15s ease-out}.ds-btn-primary:hover,.ds-btn-primary:active{background:var(--pen-strong)}.ds-btn-primary:focus-visible{outline:2px solid var(--pen);outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Everything else a person can press.",
+      "html": "<button class=\"ds-btn-secondary\">I have an account</button>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;height:44px;padding:0 16px;border:1px solid var(--rule-strong);border-radius:10px;background:var(--paper-raised);color:var(--ink);font:600 0.9375rem/1 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif;transition:background-color .15s,border-color .15s}.ds-btn-secondary:hover{background:var(--paper-sunk);border-color:var(--field)}.ds-btn-secondary:focus-visible{outline:2px solid var(--pen);outline-offset:2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "48px field on raised paper; pen border and wash ring on focus.",
+      "html": "<label class=\"ds-field\"><span>YouTube link</span><input class=\"ds-input\" placeholder=\"https://www.youtube.com/watch?v=…\"></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:6px;font:600 0.875rem/1.3 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif;color:var(--ink)}.ds-input{height:48px;padding:0 14px;border:1px solid var(--field);border-radius:10px;background:var(--paper-raised);color:var(--ink);font:400 1rem/1.5 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif;transition:border-color .15s,box-shadow .15s}.ds-input::placeholder{color:var(--ink-faint)}.ds-input:focus{outline:none;border-color:var(--pen);box-shadow:0 0 0 2px var(--pen-wash)}"
+    },
+    {
+      "name": "Sermon Moment Chip",
+      "kind": "chip",
+      "refersTo": "source-chip",
+      "description": "Provenance under a generated item; the mono range seeks the player.",
+      "html": "<button class=\"ds-chip\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" aria-hidden=\"true\"><polygon points=\"6 3 20 12 6 21 6 3\"/></svg><span class=\"ds-mono\">~18:42–20:10</span></button>",
+      "css": ".ds-chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 10px;border-radius:9999px;border:1px solid var(--rule-strong);font:600 0.8125rem/1 var(--font-ui, 'Atkinson Hyperlegible Next Variable', system-ui, sans-serif);transition:color .15s, border-color .15s;background:var(--paper-raised);color:var(--ink);cursor:pointer}.ds-chip:hover{border-color:var(--pen);color:var(--pen)}.ds-chip:focus-visible{outline:2px solid var(--pen);outline-offset:2px}.ds-mono{font-family:'Atkinson Hyperlegible Mono Variable',ui-monospace,monospace;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Your Note Chip",
+      "kind": "chip",
+      "refersTo": "source-chip-you",
+      "description": "The listener's own voice: pen on pen wash, links to the exact note block.",
+      "html": "<a class=\"ds-chip-you\" href=\"#\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" aria-hidden=\"true\"><path d=\"M13 21h8\"/><path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"/></svg>Your note · 12:43</a>",
+      "css": ".ds-chip-you{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 10px;border-radius:9999px;border:1px solid var(--rule-strong);font:600 0.8125rem/1 var(--font-ui, 'Atkinson Hyperlegible Next Variable', system-ui, sans-serif);transition:color .15s, border-color .15s;border-color:transparent;background:var(--pen-wash);color:var(--pen);text-decoration:none}.ds-chip-you:hover{border-color:var(--pen)}.ds-chip-you:focus-visible{outline:2px solid var(--pen);outline-offset:2px}"
+    },
+    {
+      "name": "Notebook Tabs",
+      "kind": "nav",
+      "refersTo": "tab-active",
+      "description": "48px tab row that scrolls, never wraps; pen underline marks the page.",
+      "html": "<nav class=\"ds-tabs\"><a class=\"ds-tab ds-tab-active\" href=\"#\">Overview</a><a class=\"ds-tab\" href=\"#\">Notes</a><a class=\"ds-tab\" href=\"#\">Sermon</a><a class=\"ds-tab\" href=\"#\">Study</a><a class=\"ds-tab\" href=\"#\">Ask AI</a></nav>",
+      "css": ".ds-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--rule)}.ds-tab{position:relative;display:inline-flex;align-items:center;height:48px;padding:0 12px;white-space:nowrap;font:600 0.9375rem/1 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif;color:var(--ink-muted);text-decoration:none}.ds-tab:hover{color:var(--ink)}.ds-tab-active{color:var(--ink)}.ds-tab-active::after{content:'';position:absolute;left:12px;right:12px;bottom:0;height:2px;border-radius:9999px;background:var(--pen)}.ds-tab:focus-visible{outline:2px solid var(--pen);outline-offset:-2px}"
+    },
+    {
+      "name": "Log Row",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Signature list item: mono time gutter, headline, reading-serif summary, provenance chips, hairline separator.",
+      "html": "<article class=\"ds-log\"><a class=\"ds-log-time\" href=\"#\">~18:42</a><div><h3 class=\"ds-log-title\">Waiting is an active expression of trust</h3><p class=\"ds-log-body\">Second point: waiting can be an active expression of trust rather than passivity.</p></div></article>",
+      "css": ".ds-log{display:grid;grid-template-columns:4.75rem minmax(0,1fr);gap:0 12px;padding:16px 0;border-bottom:1px solid var(--rule)}.ds-log-time{padding-top:4px;font:600 0.875rem/1.3 'Atkinson Hyperlegible Mono Variable',ui-monospace,monospace;font-variant-numeric:tabular-nums;color:var(--ink-muted);text-decoration:underline dotted;text-underline-offset:.3em}.ds-log-time:hover{color:var(--pen)}.ds-log-title{margin:0;font:700 1.1875rem/1.75rem 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif;color:var(--ink)}.ds-log-body{margin:4px 0 0;font:400 1.0625rem/1.65rem 'Literata Variable',Georgia,serif;color:var(--ink)}"
+    },
+    {
+      "name": "AI Voice Label",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Required above every generated block.",
+      "html": "<span class=\"ds-voice-ai\"><span class=\"ds-dash\"></span>AI summary</span>",
+      "css": ".ds-voice-ai{display:inline-flex;align-items:center;gap:6px;font:650 0.75rem/1rem 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted)}.ds-dash{display:inline-block;width:12px;border-top:1px dashed var(--ink-muted)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Field Notebook Beside the Study Bible",
+    "overview": "A listener's notebook, not a content feed. The page is warm paper; the only color that\n*acts* is a blue-black fountain-pen ink, and it marks the listener's own hand (their notes,\ntheir corrections), links, and the next action. Everything the app generated sits in the same\npaper-and-ink world but always wears a label that says who is speaking: *You*, *Sermon*,\n*Scripture*, *Photo*, or *AI summary*. Trust is the aesthetic: provenance chips, approximate\ntimes marked with \"~\", and corrections labelled \"edited by you\" are part of the look, not\ndecoration layered on top.\n\nThe system is calm and dense in the way a well-kept notebook is dense: generous line length\nfor reading, tight metadata, a mono time column down the left edge like a log, and rules\n(hairlines) instead of boxes. Long-form text the listener *reads* (the sermon's big idea,\nsummaries, quotes, notes) is set in Literata; everything they *operate* is set in Atkinson\nHyperlegible, chosen for legibility in a dim sanctuary on a phone. Sunday Mode drops to a\nlow-luminance palette so the screen does not light up a pew.\n\nThe warm paper ground is deliberate: it is the notebook metaphor that runs through every\ntoken name (`paper`, `ink`, `pen`, `rule`, `highlighter`, the dot grid), not a default\noff-white. A detector rule that flags cream backgrounds was reviewed and consciously kept.",
+    "keyCharacteristics": [
+      "One accent (pen blue); everything else is paper, ink, and hairline rules.",
+      "Two voices of type: a reading serif for content, a hyperlegible sans for controls.",
+      "Mono, tabular times in a left gutter; \"~\" means estimated, no \"~\" means the listener set it.",
+      "Provenance chips under every generated item; voice labels above every generated block.",
+      "Flat at rest; only floating layers (sheet, toast, composer, popover) cast a shadow."
+    ],
+    "rules": [
+      {
+        "name": "The One Pen Rule",
+        "body": "Pen Ink is the only accent. It means \"yours\" or \"act here\": never use it for decoration, illustration, or to make generated content look important.",
+        "section": "colors"
+      },
+      {
+        "name": "The Voice Label Rule",
+        "body": "Every block of generated text carries a voice label (`VoiceTag`): the AI label is a dashed rule plus \"AI summary\"/\"AI answer\"; the listener's voice is pen blue with a pen icon. Generated text is never left unlabelled, and AI text never wears pen blue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Reading Serif Rule",
+        "body": "Literata is for content a person reads; Atkinson is for anything a person operates. A button, tab, chip, or form label is never serif.",
+        "section": "typography"
+      },
+      {
+        "name": "The Approximate Time Rule",
+        "body": "AI-derived times are prefixed \"~\" and set in the mono; times the listener captured or corrected drop the \"~\". A time is never shown without that distinction.",
+        "section": "typography"
+      },
+      {
+        "name": "The Paper Edge Rule",
+        "body": "A resting card is an edge (a hairline or ruled border on raised paper), not a shadow. Only floating layers get a shadow, and they may keep their edge because they sit on paper of nearly the same value.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do put a voice label above every generated block and provenance chips under every generated item.",
+      "Do mark AI-estimated times with \"~\" in the mono, and drop the \"~\" once the listener sets the time.",
+      "Do use Pen Ink only for the listener's own voice, links, focus, and the primary action.",
+      "Do separate list items with hairline rules and a left time gutter instead of stacking cards.",
+      "Do set content people read in Literata at ≤ ~65ch, and every control in Atkinson Hyperlegible.",
+      "Do keep tap targets ≥ 40px and respect safe-area insets on phones.",
+      "Do redefine the same custom properties for dark and Sunday Mode rather than adding new color names."
+    ],
+    "donts": [
+      "Don't add a second accent color or tint generated content blue.",
+      "Don't give resting cards a drop shadow; shadows are for sheets, toasts, the composer, and popovers.",
+      "Don't show verse text unless a licensed Bible text provider supplied it.",
+      "Don't present a quote in quotation marks unless its evidence says it was heard or written word-for-word; paraphrases are labelled \"PARAPHRASE\" without quote marks.",
+      "Don't disable a submit button to signal validation; explain the problem beside the field.",
+      "Don't let tab labels or chip labels wrap; they scroll or truncate.",
+      "Don't use the dot grid outside writing surfaces."
+    ]
+  }
+}

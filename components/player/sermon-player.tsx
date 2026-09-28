@@ -247,7 +247,21 @@ export function SermonPlayer({ media, className }: { media: SermonMedia; classNa
         </button>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{media.title || "Sermon recording"}</p>
-          <MiniTime />
+          {player?.unplayable ? (
+            <p className="truncate text-xs text-ink-muted">
+              Player unavailable
+              {media.kind === "youtube" && media.videoId ? (
+                <>
+                  {" · "}
+                  <a href={`https://www.youtube.com/watch?v=${media.videoId}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-pen underline">
+                    Open on YouTube
+                  </a>
+                </>
+              ) : null}
+            </p>
+          ) : (
+            <MiniTime />
+          )}
         </div>
         <button
           type="button"

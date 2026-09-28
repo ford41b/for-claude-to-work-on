@@ -257,12 +257,12 @@ export function NotebookHeader({ sermon, aiLabel }: { sermon: HeaderSermon; aiLa
           {TABS.map((t) => {
             const active = current === t.seg;
             return (
-              <li key={t.seg}>
+              <li key={t.seg} className="shrink-0">
                 <Link
                   href={t.seg ? `${base}/${t.seg}` : base}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "relative inline-flex h-12 items-center px-3 text-[0.9375rem] font-semibold",
+                    "relative inline-flex h-12 items-center whitespace-nowrap px-3 text-[0.9375rem] font-semibold",
                     active ? "text-ink" : "text-ink-muted hover:text-ink",
                   )}
                 >
@@ -272,13 +272,13 @@ export function NotebookHeader({ sermon, aiLabel }: { sermon: HeaderSermon; aiLa
               </li>
             );
           })}
-          <li>
+          <li className="shrink-0">
             <button
               type="button"
               onClick={() => setMore(true)}
               aria-haspopup="dialog"
               className={cn(
-                "relative inline-flex h-12 items-center gap-1.5 px-3 text-[0.9375rem] font-semibold",
+                "relative inline-flex h-12 items-center gap-1.5 whitespace-nowrap px-3 text-[0.9375rem] font-semibold",
                 inMore ? "text-ink" : "text-ink-muted hover:text-ink",
               )}
             >
