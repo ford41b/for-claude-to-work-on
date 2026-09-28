@@ -1,3 +1,4 @@
+import type { Server } from "node:http";
 import { config } from "dotenv";
 
 config({ path: ".env.local", quiet: true });
@@ -18,7 +19,20 @@ async function main() {
   process.on("SIGTERM", stop);
   if (env.aiProvider === "none") console.warn("[worker] AI_PROVIDER is none: media analysis, OCR and Sermon Packs will be skipped.");
   if (env.aiProvider === "fixture") console.warn("[worker] Using the synthetic TEST AI provider. Never use this in production.");
+
+  // Optional health endpoint for container orchestrators and test harnesses.
+  let server: Server | null = null;
+  const healthPort = Number(process.env.WORKER_HEALTH_PORT ?? "");
+  if (healthPort > 0) {
+    const { createServer } = await import("node:http");
+    server = createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: controller.signal.aborted ? "stopping" : "ok" }));
+    }).listen(healthPort);
+  }
+
   await runWorkerLoop(db(), { concurrency: env.WORKER_CONCURRENCY, signal: controller.signal });
+  server?.close();
   await closeDb();
 }
 

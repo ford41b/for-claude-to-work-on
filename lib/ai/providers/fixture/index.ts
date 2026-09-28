@@ -182,7 +182,7 @@ function buildPack(input: SermonPackInput): SermonPackDraft {
 
 function classify(question: string) {
   const q = question.toLowerCase();
-  const type = /\bi (wrote|noted)|my notes/.test(q)
+  const type = /\bi (wrote|write|noted|note)\b|my notes?\b/.test(q)
     ? "user_notes"
     : /\bslide|photo|picture/.test(q)
       ? "photo"

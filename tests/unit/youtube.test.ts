@@ -36,6 +36,8 @@ describe("parseYouTubeUrl", () => {
   it.each([
     ["", "empty"],
     ["not a url at all", "invalid_url"],
+    ["not a link", "invalid_url"],
+    ["https://www.youtube.com/watch?v=dQw4w9WgXcQ extra words", "invalid_url"],
     ["https://vimeo.com/12345", "not_youtube"],
     [`https://www.youtube.com.evil.example/watch?v=${ID}`, "not_youtube"],
     ["https://www.youtube.com/playlist?list=PL123", "playlist_only"],

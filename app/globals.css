@@ -1,0 +1,343 @@
+@import "tailwindcss";
+@import "@fontsource-variable/atkinson-hyperlegible-next";
+@import "@fontsource-variable/atkinson-hyperlegible-mono";
+@import "@fontsource-variable/literata/opsz.css";
+@import "@fontsource-variable/literata/opsz-italic.css";
+
+/*
+ * Visual world: a field notebook kept alongside a study Bible.
+ *  - warm neutral "paper" grounds, blue-black "pen" ink as the single accent
+ *  - utilitarian labels (Atkinson Hyperlegible Next), long-form reading in Literata
+ *  - timestamps and log gutters in Atkinson Hyperlegible Mono (measurement, not costume)
+ *  - dot grid only on writing surfaces
+ */
+
+:root {
+  color-scheme: light;
+  --paper: oklch(0.972 0.006 80);
+  --paper-raised: oklch(0.992 0.003 80);
+  --paper-sunk: oklch(0.944 0.008 78);
+  --paper-deep: oklch(0.915 0.01 76);
+  --ink: oklch(0.235 0.012 60);
+  --ink-muted: oklch(0.44 0.012 62);
+  --ink-faint: oklch(0.53 0.01 65);
+  --rule: oklch(0.875 0.008 72);
+  --rule-strong: oklch(0.77 0.01 70);
+  --field: oklch(0.64 0.01 70);
+  --pen: oklch(0.45 0.135 262);
+  --pen-strong: oklch(0.39 0.14 262);
+  --pen-wash: oklch(0.935 0.03 262);
+  --on-pen: oklch(0.985 0.004 262);
+  --highlighter: oklch(0.92 0.075 96);
+  --danger: oklch(0.5 0.16 28);
+  --danger-wash: oklch(0.95 0.025 28);
+  --caution: oklch(0.5 0.1 70);
+  --caution-wash: oklch(0.95 0.035 85);
+  --ok: oklch(0.48 0.09 150);
+  --grid-dot: oklch(0.84 0.01 72);
+  --shadow-color: 40 30 20;
+  --scrim: oklch(0.2 0.01 60 / 0.42);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: oklch(0.2 0.007 70);
+    --paper-raised: oklch(0.235 0.008 70);
+    --paper-sunk: oklch(0.175 0.006 70);
+    --paper-deep: oklch(0.28 0.009 70);
+    --ink: oklch(0.925 0.008 80);
+    --ink-muted: oklch(0.74 0.01 75);
+    --ink-faint: oklch(0.62 0.01 72);
+    --rule: oklch(0.32 0.008 70);
+    --rule-strong: oklch(0.42 0.01 70);
+    --field: oklch(0.52 0.01 70);
+    --pen: oklch(0.76 0.1 258);
+    --pen-strong: oklch(0.82 0.09 258);
+    --pen-wash: oklch(0.3 0.05 262);
+    --on-pen: oklch(0.18 0.03 262);
+    --highlighter: oklch(0.42 0.07 92);
+    --danger: oklch(0.72 0.13 28);
+    --danger-wash: oklch(0.28 0.04 28);
+    --caution: oklch(0.8 0.1 80);
+    --caution-wash: oklch(0.29 0.04 80);
+    --ok: oklch(0.76 0.1 150);
+    --grid-dot: oklch(0.3 0.008 70);
+    --shadow-color: 0 0 0;
+    --scrim: oklch(0.1 0.005 60 / 0.6);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: oklch(0.2 0.007 70);
+  --paper-raised: oklch(0.235 0.008 70);
+  --paper-sunk: oklch(0.175 0.006 70);
+  --paper-deep: oklch(0.28 0.009 70);
+  --ink: oklch(0.925 0.008 80);
+  --ink-muted: oklch(0.74 0.01 75);
+  --ink-faint: oklch(0.62 0.01 72);
+  --rule: oklch(0.32 0.008 70);
+  --rule-strong: oklch(0.42 0.01 70);
+  --field: oklch(0.52 0.01 70);
+  --pen: oklch(0.76 0.1 258);
+  --pen-strong: oklch(0.82 0.09 258);
+  --pen-wash: oklch(0.3 0.05 262);
+  --on-pen: oklch(0.18 0.03 262);
+  --highlighter: oklch(0.42 0.07 92);
+  --danger: oklch(0.72 0.13 28);
+  --danger-wash: oklch(0.28 0.04 28);
+  --caution: oklch(0.8 0.1 80);
+  --caution-wash: oklch(0.29 0.04 80);
+  --ok: oklch(0.76 0.1 150);
+  --grid-dot: oklch(0.3 0.008 70);
+  --shadow-color: 0 0 0;
+  --scrim: oklch(0.1 0.005 60 / 0.6);
+}
+
+/* Sunday Mode: low luminance for a dim sanctuary, regardless of theme. */
+[data-surface="sunday"] {
+  color-scheme: dark;
+  --paper: oklch(0.155 0.005 70);
+  --paper-raised: oklch(0.19 0.006 70);
+  --paper-sunk: oklch(0.13 0.004 70);
+  --paper-deep: oklch(0.23 0.007 70);
+  --ink: oklch(0.86 0.006 80);
+  --ink-muted: oklch(0.68 0.008 75);
+  --ink-faint: oklch(0.585 0.008 72);
+  --rule: oklch(0.27 0.006 70);
+  --rule-strong: oklch(0.36 0.008 70);
+  --field: oklch(0.5 0.008 70);
+  --pen: oklch(0.72 0.08 258);
+  --pen-strong: oklch(0.78 0.08 258);
+  --pen-wash: oklch(0.26 0.04 262);
+  --on-pen: oklch(0.15 0.02 262);
+  --highlighter: oklch(0.36 0.06 92);
+  --grid-dot: oklch(0.24 0.006 70);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-paper-sunk: var(--paper-sunk);
+  --color-paper-deep: var(--paper-deep);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-field: var(--field);
+  --color-pen: var(--pen);
+  --color-pen-strong: var(--pen-strong);
+  --color-pen-wash: var(--pen-wash);
+  --color-on-pen: var(--on-pen);
+  --color-highlighter: var(--highlighter);
+  --color-danger: var(--danger);
+  --color-danger-wash: var(--danger-wash);
+  --color-caution: var(--caution);
+  --color-caution-wash: var(--caution-wash);
+  --color-ok: var(--ok);
+
+  --font-ui: "Atkinson Hyperlegible Next Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-read: "Literata Variable", "Iowan Old Style", Georgia, serif;
+  --font-mono: "Atkinson Hyperlegible Mono Variable", ui-monospace, "SF Mono", monospace;
+
+  --text-2xs: 0.75rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.15rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.3rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-md: 1.0625rem;
+  --text-md--line-height: 1.65rem;
+  --text-lg: 1.1875rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.375rem;
+  --text-xl--line-height: 1.85rem;
+  --text-2xl: 1.625rem;
+  --text-2xl--line-height: 2.1rem;
+  --text-3xl: 2rem;
+  --text-3xl--line-height: 2.45rem;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-sheet: 0 -8px 30px -12px rgb(var(--shadow-color) / 0.28), 0 -1px 0 rgb(var(--shadow-color) / 0.04);
+  --shadow-float: 0 10px 28px -14px rgb(var(--shadow-color) / 0.35), 0 2px 6px -2px rgb(var(--shadow-color) / 0.12);
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* ---------------------------------------------------------------------------
+ * Base
+ * ------------------------------------------------------------------------ */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+html[data-text-size="small"] { font-size: 93.75%; }
+html[data-text-size="large"] { font-size: 112.5%; }
+html[data-text-size="xlarge"] { font-size: 125%; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  caret-color: var(--pen);
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+::selection {
+  background: var(--pen-wash);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--pen);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+a {
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small-caps labels: the notebook's printed field names. */
+.label-caps {
+  font-size: var(--text-2xs);
+  line-height: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 650;
+  color: var(--ink-muted);
+}
+
+/* Writing surfaces carry a faint dot grid, like a field notebook page. */
+.dot-grid {
+  background-image: radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 1.4px);
+  background-size: 22px 22px;
+  background-position: -1px -1px;
+}
+
+.reading {
+  font-family: var(--font-read);
+  font-optical-sizing: auto;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--paper-sunk), var(--paper-deep), var(--paper-sunk));
+  background-size: 200% 100%;
+  animation: skeleton 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+@keyframes skeleton {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.pt-safe { padding-top: env(safe-area-inset-top); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Note editor (Tiptap)
+ * ------------------------------------------------------------------------ */
+.note-editor {
+  font-family: var(--font-read);
+  font-optical-sizing: auto;
+  font-size: var(--text-md);
+  line-height: 1.7;
+  outline: none;
+  min-height: 40vh;
+  padding-block: 0.5rem 6rem;
+}
+.note-editor:focus-visible { outline: none; }
+.note-editor > * + * { margin-top: 0.6em; }
+.note-editor h1, .note-editor h2, .note-editor h3 {
+  font-family: var(--font-read);
+  font-weight: 650;
+  line-height: 1.25;
+  margin-top: 1.2em;
+}
+.note-editor h1 { font-size: var(--text-2xl); }
+.note-editor h2 { font-size: var(--text-xl); }
+.note-editor h3 { font-size: var(--text-lg); }
+.note-editor ul, .note-editor ol { padding-left: 1.4em; }
+.note-editor ul { list-style: disc; }
+.note-editor ol { list-style: decimal; }
+.note-editor li > p { margin: 0; }
+.note-editor li::marker { color: var(--ink-faint); }
+.note-editor blockquote {
+  border-left: 1px solid var(--rule-strong);
+  padding-left: 1em;
+  color: var(--ink-muted);
+  font-style: italic;
+}
+.note-editor mark {
+  background: var(--highlighter);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 0.1em;
+}
+.note-editor ul[data-type="taskList"] { list-style: none; padding-left: 0.2em; }
+.note-editor ul[data-type="taskList"] li { display: flex; gap: 0.6em; align-items: flex-start; }
+.note-editor ul[data-type="taskList"] li > label { margin-top: 0.3em; }
+.note-editor ul[data-type="taskList"] input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--pen);
+}
+.note-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--ink-faint);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.note-editor [data-block-flash="true"] {
+  animation: block-flash 2.2s var(--ease-out-quart);
+}
+@keyframes block-flash {
+  0%, 30% { background: var(--pen-wash); box-shadow: 0 0 0 6px var(--pen-wash); }
+  100% { background: transparent; box-shadow: 0 0 0 6px transparent; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sheet-in {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes toast-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}

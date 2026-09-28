@@ -5,6 +5,9 @@ import { fixtureEmbedding } from "@/lib/ai/providers/fixture";
 import { closeDb, db } from "@/lib/db/admin";
 import { drainQueue } from "@/lib/jobs/runner";
 import { addCapture, saveNote } from "@/lib/notes/service";
+import { askQuestion, type AskEvent } from "@/lib/retrieval/ask";
+import { updateReviewItem } from "@/lib/review/service";
+import { requestStudy } from "@/lib/study/service";
 import { vectorLiteral } from "@/lib/retrieval/chunk";
 import { createSermon, finishSermon, rebuildPack, type ServiceContext } from "@/lib/sermons/service";
 import { getProcessingStatus } from "@/lib/sermons/status";
@@ -185,6 +188,40 @@ describe("sermon processing pipeline (synthetic AI provider)", () => {
   it("does not re-analyze an unchanged recording", async () => {
     const { data: analyses } = await alice.client.from("ai_artifacts").select("id").eq("sermon_id", sermonId).eq("type", "VIDEO_ANALYSIS");
     expect(analyses).toHaveLength(1);
+  });
+
+  it("answers questions with validated citations and saves the thread", async () => {
+    const events: AskEvent[] = [];
+    const result = await askQuestion(ctx, sermonId, { question: "What did I write about God working while I wait?" }, (e) => events.push(e));
+    expect(events.map((e) => (e.type === "stage" ? e.stage : e.type))).toEqual(["understanding", "searching", "answering"]);
+    expect(result.supportedBySermon).toBe(true);
+    expect(result.citations.length).toBeGreaterThan(0);
+    expect(result.citations.some((c) => c.sourceType === "USER_NOTE" && c.noteBlockId === "p1")).toBe(true);
+    for (const c of result.citations) expect(result.answer).toContain(`[${c.key}]`);
+    const { data: msgs } = await alice.client.from("chat_messages").select("role").eq("thread_id", result.threadId).order("created_at");
+    expect(msgs!.map((m) => m.role)).toEqual(["user", "assistant"]);
+    const { data: cites } = await alice.client.from("source_citations").select("subject_part").eq("subject_type", "chat_message").eq("subject_id", result.messageId);
+    expect(cites!.length).toBe(result.citations.length);
+  });
+
+  it("generates a cited Bible study in the requested format", async () => {
+    const { id } = await requestStudy(ctx, sermonId, { format: "fifteen_minute" });
+    await drain();
+    const { data: study } = await alice.client.from("study_guides").select("*").eq("id", id).single();
+    expect(study?.status).toBe("ready");
+    const content = study!.content as { sections: { key: string; source_keys: string[] }[] };
+    expect(content.sections.map((s) => s.key)).toEqual(["sermon_connection", "observe", "interpret", "apply", "reflection", "prayer_prompt", "next_step"]);
+    const { data: cites } = await alice.client.from("source_citations").select("subject_part").eq("subject_type", "study_guide").eq("subject_id", id);
+    expect(cites!.length).toBeGreaterThan(0);
+  });
+
+  it("records review actions without scoring", async () => {
+    const { data: item } = await alice.client.from("review_items").select("id").eq("sermon_id", sermonId).limit(1).single();
+    await updateReviewItem(ctx, item!.id, { status: "review_again" });
+    const { data: after } = await alice.client.from("review_items").select("status, times_reviewed, due_on").eq("id", item!.id).single();
+    expect(after?.status).toBe("review_again");
+    expect(after?.times_reviewed).toBe(1);
+    expect(after?.due_on).toBeTruthy();
   });
 
   it("explains private videos and falls back without retrying", async () => {

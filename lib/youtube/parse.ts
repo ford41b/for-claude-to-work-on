@@ -55,7 +55,7 @@ export function parseYouTubeTime(value: string | null): number | null {
 export function parseYouTubeUrl(input: string): YouTubeParseResult {
   const raw = input.trim();
   if (!raw) return { ok: false, error: "empty" };
-  if (raw.length > 2048) return { ok: false, error: "invalid_url" };
+  if (raw.length > 2048 || /\s/.test(raw)) return { ok: false, error: "invalid_url" };
 
   let url: URL;
   try {
