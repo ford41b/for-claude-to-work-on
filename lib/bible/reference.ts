@@ -116,8 +116,46 @@ function runParser(text: string): { osis: string; indices: [number, number] }[] 
 }
 
 /**
+ * Book names and abbreviations that are also everyday words. The parser happily reads
+ * "I am 5 minutes late" as Amos 5 and "the numbers 6 and 7" as Numbers 6, so these need more
+ * evidence: short function-word abbreviations need explicit verse notation, and common words
+ * written in lower case need a verse. Well-known short forms (Ps, Jn, Mt…) are unaffected.
+ */
+const SAFE_SHORT_FORMS = new Set(["ps", "jn", "mt", "mk", "lk", "dt", "rv", "ro"]);
+const VERSE_REQUIRED = new Set(["act"]);
+const LOWERCASE_NEEDS_VERSE = new Set([
+  "acts", "job", "mark", "numbers", "song", "rev", "gal", "jam", "dan", "lam", "kings", "est", "mic",
+]);
+const EXPLICIT_VERSE = /\d\s*[:.]\s*\d|\bvv?\.?\s*\d|\bverses?\s+\d/i;
+
+function isLikelyProse(raw: string, passage: ParsedPassage): boolean {
+  const word = /^([A-Za-z]+)\.?\s/.exec(raw)?.[1];
+  if (!word) return false;
+  const lower = word.toLowerCase();
+  if ((lower.length <= 2 && !SAFE_SHORT_FORMS.has(lower)) || VERSE_REQUIRED.has(lower)) {
+    return !EXPLICIT_VERSE.test(raw);
+  }
+  if (LOWERCASE_NEEDS_VERSE.has(lower) && word === lower) return passage.verseStart === null;
+  return false;
+}
+
+function span(p: ParsedPassage): [number, number] {
+  const start = (p.chapterStart ?? 0) * 1000 + (p.verseStart ?? 0);
+  const end = (p.chapterEnd ?? p.chapterStart ?? 999) * 1000 + (p.verseEnd ?? 999);
+  return [start, end];
+}
+
+function overlaps(a: ParsedPassage, b: ParsedPassage): boolean {
+  if (a.book !== b.book) return false;
+  const [as, ae] = span(a);
+  const [bs, be] = span(b);
+  return as <= be && bs <= ae;
+}
+
+/**
  * Finds Scripture references in free text: explicit ("Jn 3:16"), spoken ("Romans eight"),
- * and well-known story allusions ("the prodigal son"). Each distinct passage appears once.
+ * and well-known story allusions ("the prodigal son"). Each distinct passage appears once;
+ * a story name that overlaps a passage already cited explicitly is not repeated.
  */
 export function findScripture(text: string, options: { includeAllusions?: boolean } = {}): ScriptureMatch[] {
   const includeAllusions = options.includeAllusions ?? true;
@@ -126,10 +164,11 @@ export function findScripture(text: string, options: { includeAllusions?: boolea
 
   for (const r of runParser(text)) {
     const p = parseOsis(r.osis);
-    if (!p || found.has(p.osis)) continue;
+    const raw = text.slice(r.indices[0], r.indices[1]);
+    if (!p || found.has(p.osis) || isLikelyProse(raw, p)) continue;
     found.set(p.osis, {
       ...p,
-      raw: text.slice(r.indices[0], r.indices[1]),
+      raw,
       kind: "explicit",
       confidence: "high",
       index: r.indices[0],
@@ -140,11 +179,11 @@ export function findScripture(text: string, options: { includeAllusions?: boolea
   if (spoken !== text) {
     for (const r of runParser(spoken)) {
       const p = parseOsis(r.osis);
-      if (!p || found.has(p.osis)) continue;
-      // If the same book+chapter was already found explicitly, this is a rewrite artifact.
+      const raw = spoken.slice(r.indices[0], r.indices[1]);
+      if (!p || found.has(p.osis) || isLikelyProse(raw, p)) continue;
       found.set(p.osis, {
         ...p,
-        raw: spoken.slice(r.indices[0], r.indices[1]),
+        raw,
         kind: "spoken",
         confidence: "medium",
         index: -1,
@@ -156,6 +195,7 @@ export function findScripture(text: string, options: { includeAllusions?: boolea
     for (const m of findAllusions(text)) {
       const p = parseOsis(m.allusion.osis);
       if (!p || found.has(p.osis)) continue;
+      if ([...found.values()].some((f) => f.kind !== "allusion" && overlaps(f, p))) continue;
       found.set(p.osis, {
         ...p,
         raw: text.slice(m.index, m.index + m.length),

@@ -23,6 +23,9 @@ const ORDINAL_PREFIX: Record<string, string> = {
   third: "3", "3rd": "3", iii: "3",
 };
 
+/** Cardinals said in place of ordinals ("Two Corinthians"); only honoured when a number follows. */
+const CARDINAL_PREFIX: Record<string, string> = { one: "1", two: "2", three: "3" };
+
 const NUMBERED_BOOKS = [
   "samuel", "kings", "chronicles", "corinthians", "thessalonians", "timothy", "peter", "john",
 ];
@@ -116,6 +119,12 @@ function matchBook(tokens: Token[], i: number): number {
     const next = tokens[i + 1];
     if (next && NUMBERED_BOOKS.includes(next.lower)) return i + 2;
   }
+  const cardinal = CARDINAL_PREFIX[t.lower];
+  if (cardinal) {
+    const next = tokens[i + 1];
+    const after = tokens[i + 2];
+    if (next && NUMBERED_BOOKS.includes(next.lower) && after && (isNumberWord(after.lower) || /^\d+$/.test(after.lower))) return i + 2;
+  }
   if (/^[123]$/.test(t.lower)) {
     const next = tokens[i + 1];
     if (next && NUMBERED_BOOKS.includes(next.lower)) return i + 2;
@@ -151,7 +160,7 @@ export function normalizeSpokenReferences(input: string): string {
     }
     // Replace an ordinal prefix ("First Corinthians" → "1 Corinthians").
     const firstTok = tokens[i]!;
-    const ordinal = ORDINAL_PREFIX[firstTok.lower];
+    const ordinal = ORDINAL_PREFIX[firstTok.lower] ?? CARDINAL_PREFIX[firstTok.lower];
     if (ordinal && afterBook - i === 2) {
       replacements.push({ start: firstTok.start, end: firstTok.end, text: ordinal });
     }

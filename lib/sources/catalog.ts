@@ -114,6 +114,119 @@ export async function loadCurrentRecording(sql: Sql, sermonId: string) {
   return rows[0] ?? null;
 }
 
+type BuiltUnit = [CatalogUnit, Omit<EvidenceRef, "key" | "kind" | "label">];
+
+/** Recording segments → V# units. Heard-verbatim quotes attach to the segment they fall in. */
+export function recordingUnits(
+  analysis: StoredMediaAnalysis,
+  recording: { source_id: string; source_type: SourceType },
+): BuiltUnit[] {
+  const segments = [...analysis.segments].sort((a, b) => a.start - b.start);
+  return segments.map((seg, i) => {
+    const heard = [
+      ...seg.key_phrases,
+      ...analysis.quotes.filter((q) => q.heard_verbatim && q.confidence !== "low" && q.at >= seg.start && q.at <= seg.end).map((q) => q.text),
+    ];
+    const time = formatTimestampRange(seg.start, seg.end, { approximate: true });
+    return [
+      {
+        key: `V${i + 1}`,
+        kind: "segment",
+        label: `Sermon ${time}`,
+        text: seg.summary,
+        details: [
+          `Kind: ${seg.kind}`,
+          heard.length ? `Heard word-for-word: ${heard.map((h) => `"${h}"`).join(" | ")}` : null,
+          seg.scripture_mentions.length ? `Scripture mentioned: ${seg.scripture_mentions.join("; ")}` : null,
+          seg.on_screen_text ? `On screen: ${seg.on_screen_text}` : null,
+          `Timing confidence: ${seg.timing_confidence}`,
+        ].filter((d): d is string => Boolean(d)),
+      },
+      {
+        sourceId: recording.source_id,
+        sourceType: recording.source_type,
+        noteBlockId: null,
+        noteBlockIds: [],
+        timestampStart: seg.start,
+        timestampEnd: seg.end,
+        timestampSource: "ai",
+        page: null,
+        excerpt: excerpt(seg.summary),
+        text: [seg.summary, ...heard, seg.on_screen_text ?? ""].join("\n"),
+        confidence: seg.timing_confidence,
+        verbatimPhrases: heard,
+      },
+    ];
+  });
+}
+
+/** One note block (or a small group from the same note) → an N# unit. */
+export function noteUnit(
+  key: string,
+  group: { source_id: string; block_id: string; text: string; timestamp_seconds: number | null }[],
+): BuiltUnit {
+  const first = group[0]!;
+  const text = group.map((b) => b.text).join("\n");
+  const ts = group.find((b) => b.timestamp_seconds !== null)?.timestamp_seconds ?? null;
+  return [
+    { key, kind: "note", label: ts !== null ? `Your note (at ${formatTimestamp(ts)} in the sermon)` : "Your note", text },
+    {
+      sourceId: first.source_id,
+      sourceType: "USER_NOTE",
+      noteBlockId: first.block_id,
+      noteBlockIds: group.map((b) => b.block_id),
+      timestampStart: ts,
+      timestampEnd: null,
+      timestampSource: ts !== null ? "user_capture" : null,
+      page: null,
+      excerpt: excerpt(text),
+      text,
+      confidence: "high",
+      verbatimPhrases: [text],
+    },
+  ];
+}
+
+/** A photo's current transcription → a P# unit (# is the photo's number in the notebook). */
+export function photoUnit(p: {
+  source_id: string;
+  ordinal: number;
+  photo_kind: string | null;
+  full_text: string;
+  overall_confidence: Confidence | null;
+  legibility_note: string | null;
+  origin: Enums<"item_origin"> | null;
+  sermon_timestamp_seconds: number | null;
+}): BuiltUnit {
+  return [
+    {
+      key: `P${p.ordinal}`,
+      kind: "photo",
+      label: `Photo ${p.ordinal}${p.photo_kind ? ` (${p.photo_kind})` : ""}`,
+      text: p.full_text,
+      details: [
+        p.origin === "user" ? "Transcription corrected by the listener" : `Transcription confidence: ${p.overall_confidence ?? "unknown"}`,
+        p.legibility_note ? `Legibility: ${p.legibility_note}` : null,
+        p.sermon_timestamp_seconds !== null ? `Taken at ${formatTimestamp(p.sermon_timestamp_seconds)} in the sermon` : null,
+      ].filter((d): d is string => Boolean(d)),
+    },
+    {
+      sourceId: p.source_id,
+      sourceType: "PHOTO",
+      noteBlockId: null,
+      noteBlockIds: [],
+      timestampStart: p.sermon_timestamp_seconds,
+      timestampEnd: null,
+      timestampSource: p.sermon_timestamp_seconds !== null ? "user_capture" : null,
+      page: null,
+      excerpt: excerpt(p.full_text),
+      text: p.full_text,
+      confidence: p.origin === "user" ? "high" : p.overall_confidence,
+      verbatimPhrases: [p.full_text],
+    },
+  ];
+}
+
 export async function buildCatalog(sql: Sql, sermonId: string): Promise<SermonCatalog | null> {
   const sermon = await loadSermon(sql, sermonId);
   if (!sermon) return null;
@@ -134,45 +247,9 @@ export async function buildCatalog(sql: Sql, sermonId: string): Promise<SermonCa
     const analysis = recording.structured_content;
     recordingNote = analysis.content_note;
     hashParts.push(`rec:${recording.artifact_id}`);
-    const segments = [...analysis.segments].sort((a, b) => a.start - b.start);
-    segments.forEach((seg, i) => {
-      const key = `V${i + 1}`;
-      const heard = [
-        ...seg.key_phrases,
-        ...analysis.quotes.filter((q) => q.heard_verbatim && q.confidence !== "low" && q.at >= seg.start && q.at <= seg.end).map((q) => q.text),
-      ];
-      const time = formatTimestampRange(seg.start, seg.end, { approximate: true });
-      add(
-        {
-          key,
-          kind: "segment",
-          label: `Sermon ${time}`,
-          text: seg.summary,
-          details: [
-            `Kind: ${seg.kind}`,
-            heard.length ? `Heard word-for-word: ${heard.map((h) => `"${h}"`).join(" | ")}` : null,
-            seg.scripture_mentions.length ? `Scripture mentioned: ${seg.scripture_mentions.join("; ")}` : null,
-            seg.on_screen_text ? `On screen: ${seg.on_screen_text}` : null,
-            `Timing confidence: ${seg.timing_confidence}`,
-          ].filter((d): d is string => Boolean(d)),
-        },
-        {
-          sourceId: recording.source_id,
-          sourceType: recording.source_type,
-          noteBlockId: null,
-          noteBlockIds: [],
-          timestampStart: seg.start,
-          timestampEnd: seg.end,
-          timestampSource: "ai",
-          page: null,
-          excerpt: excerpt(seg.summary),
-          text: [seg.summary, ...heard, seg.on_screen_text ?? ""].join("\n"),
-          confidence: seg.timing_confidence,
-          verbatimPhrases: heard,
-        },
-      );
-    });
-    segmentCount = segments.length;
+    const built = recordingUnits(analysis, recording);
+    for (const [unit, ref] of built) add(unit, ref);
+    segmentCount = built.length;
   }
 
   // --- Notes ----------------------------------------------------------------
@@ -194,26 +271,8 @@ export async function buildCatalog(sql: Sql, sermonId: string): Promise<SermonCa
     let j = i + 1;
     while (j < blocks.length && group.length < groupSize && blocks[j]!.note_id === first.note_id) group.push(blocks[j++]!);
     i = j;
-    const text = group.map((b) => b.text).join("\n");
-    const key = `N${++noteIndex}`;
-    const ts = group.find((b) => b.timestamp_seconds !== null)?.timestamp_seconds ?? null;
-    add(
-      { key, kind: "note", label: ts !== null ? `Your note (at ${formatTimestamp(ts)} in the sermon)` : "Your note", text },
-      {
-        sourceId: first.source_id,
-        sourceType: "USER_NOTE",
-        noteBlockId: first.block_id,
-        noteBlockIds: group.map((b) => b.block_id),
-        timestampStart: ts,
-        timestampEnd: null,
-        timestampSource: ts !== null ? "user_capture" : null,
-        page: null,
-        excerpt: excerpt(text),
-        text,
-        confidence: "high",
-        verbatimPhrases: [text],
-      },
-    );
+    const [unit, ref] = noteUnit(`N${++noteIndex}`, group);
+    add(unit, ref);
   }
 
   // --- Photos (current OCR) -------------------------------------------------
@@ -244,35 +303,8 @@ export async function buildCatalog(sql: Sql, sermonId: string): Promise<SermonCa
     hashParts.push(`photo:${p.source_id}:${p.ocr_id ?? "none"}`);
     if (!p.full_text?.trim()) continue;
     photoCount++;
-    const key = `P${p.ordinal}`;
-    const label = `Photo ${p.ordinal}${p.photo_kind ? ` (${p.photo_kind})` : ""}`;
-    add(
-      {
-        key,
-        kind: "photo",
-        label,
-        text: p.full_text,
-        details: [
-          p.origin === "user" ? "Transcription corrected by the listener" : `Transcription confidence: ${p.overall_confidence ?? "unknown"}`,
-          p.legibility_note ? `Legibility: ${p.legibility_note}` : null,
-          p.sermon_timestamp_seconds !== null ? `Taken at ${formatTimestamp(p.sermon_timestamp_seconds)} in the sermon` : null,
-        ].filter((d): d is string => Boolean(d)),
-      },
-      {
-        sourceId: p.source_id,
-        sourceType: "PHOTO",
-        noteBlockId: null,
-        noteBlockIds: [],
-        timestampStart: p.sermon_timestamp_seconds,
-        timestampEnd: null,
-        timestampSource: p.sermon_timestamp_seconds !== null ? "user_capture" : null,
-        page: null,
-        excerpt: excerpt(p.full_text),
-        text: p.full_text,
-        confidence: p.origin === "user" ? "high" : p.overall_confidence,
-        verbatimPhrases: [p.full_text],
-      },
-    );
+    const [unit, ref] = photoUnit({ ...p, full_text: p.full_text });
+    add(unit, ref);
   }
 
   // --- Documents ------------------------------------------------------------

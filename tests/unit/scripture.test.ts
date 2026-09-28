@@ -63,6 +63,24 @@ describe("findScripture", () => {
     expect(found.map((f) => f.normalized)).toEqual(["Romans 8:28"]);
   });
 
+  it("ignores everyday words that double as book abbreviations", () => {
+    expect(findScripture("I am 5 minutes late. He is 40 now. Is 5 enough?")).toEqual([]);
+    expect(findScripture("the numbers 6 and 7 were on the board; Act 2 of the play")).toEqual([]);
+    expect(findScripture("Is 40:31 and Am 5:24").map((f) => f.osis)).toEqual(["Isa.40.31", "Amos.5.24"]);
+    expect(findScripture("reread mark 4:35-41").map((f) => f.osis)).toEqual(["Mark.4.35-Mark.4.41"]);
+    expect(findScripture("Acts 2 and Ps 23").map((f) => f.osis)).toEqual(["Acts.2", "Ps.23"]);
+  });
+
+  it("does not repeat a story name that overlaps an explicit reference", () => {
+    expect(findScripture("Matthew 28:19-20, the Great Commission.").map((f) => f.osis)).toEqual(["Matt.28.19-Matt.28.20"]);
+    expect(findScripture("Romans 8:28 and the prodigal son").map((f) => f.kind)).toEqual(["explicit", "allusion"]);
+  });
+
+  it("reads cardinal book prefixes only when a number follows", () => {
+    expect(findScripture("Two Corinthians five seventeen").map((f) => f.osis)).toEqual(["2Cor.5.17"]);
+    expect(findScripture("There were two Johns in the choir.")).toEqual([]);
+  });
+
   it("deduplicates repeated passages", () => {
     const found = findScripture("John 3:16. Again, John 3:16!");
     expect(found).toHaveLength(1);

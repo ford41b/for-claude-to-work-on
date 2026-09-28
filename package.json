@@ -20,7 +20,7 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:types": "supabase gen types typescript --local --schema public > types/database.ts",
-    "eval": "tsx evals/run.ts",
+    "eval": "tsx --conditions=react-server evals/run.ts",
     "check": "npm run lint && npm run typecheck && npm run test"
   },
   "dependencies": {
