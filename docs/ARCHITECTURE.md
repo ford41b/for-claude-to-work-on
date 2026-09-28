@@ -335,11 +335,15 @@ Every call records provider, model, prompt version, token usage, latency, and es
   sermon's processing view is *computed* from its jobs, so it cannot show "processing" once
   every job is terminal. Every failure state offers a next action (retry / upload recording /
   continue with notes).
-- **Dependencies**: source jobs (`ANALYZE_*`, `PROCESS_PHOTO`, `PROCESS_DOCUMENT`) call
-  `maybeScheduleSynthesis(sermon)` when they finish; once no source job is pending and the
-  sermon is finished, `BUILD_SERMON_PACK` is enqueued with
-  `dedupe_key = pack:<sermon>:<source_version_hash>`. The pack job enqueues `CREATE_EMBEDDINGS`.
-  Post-finish edits enqueue a debounced (`run_after = now()+3m`) rebuild.
+- **Dependencies**: source jobs (`INGEST_SERMON`, `ANALYZE_*`, `PROCESS_PHOTO`,
+  `PROCESS_DOCUMENT`) call `maybeScheduleSynthesis(sermon)` when they finish. Once the sermon is
+  finished and no source job is pending, it enqueues `EXTRACT_SCRIPTURE`
+  (`dedupe_key = scripture:<sermon>`), which enqueues `BUILD_SERMON_PACK`
+  (`dedupe_key = pack:<sermon>`). The pack job skips itself when the catalog's
+  `source_version_hash` (sources + prompt version) matches the current pack, and otherwise
+  enqueues `CREATE_EMBEDDINGS`. Post-finish edits schedule a debounced rebuild (`run_after`:
+  notes +3 min, photo transcription corrections +2 min, source removal +1 min), and edits that
+  land while a pack is building trigger one more rebuild a minute later.
 - **Stages → UI**: Preparing sermon (INGEST_SERMON) · Understanding sermon (ANALYZE_*) · Reading
   photos (PROCESS_PHOTO) · Reading documents · Identifying Scripture (EXTRACT_SCRIPTURE) ·
   Connecting sources / Building Sermon Pack (BUILD_SERMON_PACK, with sub-stages) · Preparing AI
@@ -512,10 +516,10 @@ recorded per job for monitoring.
   (`<user>/<sermon>/<file>`); bucket-level MIME allowlists and size caps; post-upload magic-byte
   sniffing (`file-type`) and size verification before any processing; rights confirmation
   recorded for audio/video; originals kept private; previews stripped of EXIF (GPS).
-- **Secrets**: `GEMINI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `CRON_SECRET`,
-  `YOUTUBE_API_KEY`, Bible keys are server-only (validated by a Zod env schema; modules
-  importing them are marked `server-only`). Only `NEXT_PUBLIC_SUPABASE_URL` and the publishable
-  anon key reach the browser.
+- **Secrets**: `GEMINI_API_KEY`, `SUPABASE_SECRET_KEY`, `DATABASE_URL`, `CRON_SECRET`,
+  `YOUTUBE_API_KEY`, Bible keys are server-only (validated by a Zod env schema; the env module,
+  admin clients, and AI provider modules import `server-only`, so a client import fails the
+  build). Only `NEXT_PUBLIC_SUPABASE_URL` and the publishable key reach the browser.
 - **Tenant isolation**: RLS + storage path policies + worker always scoping by job `user_id`.
 - **Rate limiting**: Postgres fixed-window counters per user and action (ask, study, finish,
   uploads, YouTube attach).

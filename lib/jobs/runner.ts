@@ -36,6 +36,13 @@ const TIMEOUT_MS: Partial<Record<JobType, number>> = {
 };
 const DEFAULT_TIMEOUT_MS = 4 * 60_000;
 
+/**
+ * Jobs whose time limit is longer than a request-scoped or cron drain can count on when the
+ * host is serverless (the platform stops the function mid-job). Those drains leave them to a
+ * long-running worker; see lib/http/context.ts.
+ */
+export const LONG_JOB_TYPES: JobType[] = ["ANALYZE_VIDEO", "ANALYZE_AUDIO"];
+
 const SOURCE_JOBS = new Set<JobType>(["INGEST_SERMON", "ANALYZE_VIDEO", "ANALYZE_AUDIO", "PROCESS_PHOTO", "PROCESS_DOCUMENT"]);
 const UNAVAILABLE_CODES = new Set(["media_private", "media_unavailable", "media_unsupported", "media_too_long", "content_blocked"]);
 
@@ -124,23 +131,26 @@ export async function runJob(sql: Sql, job: JobRow, workerId: string): Promise<"
 }
 
 /** Claims and runs one batch. Returns the number of jobs processed. */
-export async function processBatch(sql: Sql, workerId: string, limit: number): Promise<number> {
+export async function processBatch(sql: Sql, workerId: string, limit: number, excludeTypes: JobType[] = []): Promise<number> {
   const expired = await sweepExpiredLeases(sql);
   for (const job of expired.filter((j) => j.status === "failed")) {
     await onTerminalFailure(sql, job, { code: job.error_code ?? "lease_expired", message: job.last_error ?? "Processing stopped unexpectedly." });
   }
-  const jobs = await claimJobs(sql, workerId, limit);
+  const jobs = await claimJobs(sql, workerId, limit, { excludeTypes });
   await Promise.all(jobs.map((job) => runJob(sql, job, workerId)));
   return jobs.length;
 }
 
 /** Drains the queue until it is empty or the time budget is spent (serverless runner). */
-export async function drainQueue(sql: Sql, options: { budgetMs: number; concurrency: number; workerId?: string }): Promise<number> {
+export async function drainQueue(
+  sql: Sql,
+  options: { budgetMs: number; concurrency: number; workerId?: string; excludeTypes?: JobType[] },
+): Promise<number> {
   const workerId = options.workerId ?? newWorkerId();
   const deadline = Date.now() + options.budgetMs;
   let total = 0;
   while (Date.now() < deadline) {
-    const n = await processBatch(sql, workerId, options.concurrency);
+    const n = await processBatch(sql, workerId, options.concurrency, options.excludeTypes);
     total += n;
     if (n === 0) break;
   }

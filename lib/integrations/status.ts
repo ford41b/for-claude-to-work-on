@@ -45,9 +45,13 @@ export function integrationStatuses(): IntegrationStatus[] {
     {
       id: "bible_text",
       name: "Bible text provider",
-      state: env.BIBLE_PROVIDER === "api_bible" && env.API_BIBLE_KEY ? "AVAILABLE" : "DISABLED",
+      // No adapter ships yet, so this never reports AVAILABLE even when a key is configured.
+      state: env.BIBLE_PROVIDER === "api_bible" ? "UNAVAILABLE" : "DISABLED",
       purpose: "Show verse text next to references.",
-      note: "Without a licensed provider, references are shown without verse text.",
+      note:
+        env.BIBLE_PROVIDER === "api_bible"
+          ? "The API.Bible adapter is planned but not built yet. References are shown without verse text."
+          : "Not configured. References are shown without verse text.",
     },
     {
       id: "gemini_notebook_audio",

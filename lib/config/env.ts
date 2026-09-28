@@ -1,3 +1,4 @@
+import "server-only";
 import { z } from "zod";
 
 /**
@@ -36,6 +37,12 @@ const serverSchema = z.object({
   API_BIBLE_TRANSLATION_LABEL: optionalString,
   CRON_SECRET: optionalString,
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(3),
+  /**
+   * Whether request-scoped and cron drains may run long media analysis. "auto" means yes,
+   * except on Vercel, where functions are stopped at their time limit and a separate worker
+   * must run those jobs.
+   */
+  WEB_DRAIN_MEDIA: z.enum(["auto", "on", "off"]).default("auto"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 

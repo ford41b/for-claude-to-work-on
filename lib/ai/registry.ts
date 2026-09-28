@@ -1,3 +1,4 @@
+import "server-only";
 import { serverEnv } from "@/lib/config/env";
 import { AIError } from "@/lib/ai/errors";
 import { FixtureProvider } from "@/lib/ai/providers/fixture";

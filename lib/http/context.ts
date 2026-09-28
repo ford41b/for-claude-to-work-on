@@ -3,13 +3,21 @@ import { after } from "next/server";
 import { requireUser } from "@/lib/auth/session";
 import { serverEnv } from "@/lib/config/env";
 import { db } from "@/lib/db/admin";
-import { drainQueue } from "@/lib/jobs/runner";
+import type { JobType } from "@/lib/jobs/queue";
+import { drainQueue, LONG_JOB_TYPES } from "@/lib/jobs/runner";
 import { errorFields, log } from "@/lib/observability/log";
 import type { ServiceContext } from "@/lib/sermons/service";
 
 export async function serviceContext(): Promise<ServiceContext> {
   const { supabase, user } = await requireUser();
   return { supabase, userId: user.id, sql: db() };
+}
+
+/** Job types that web-tier drains (after-request and cron) must leave to the long-running worker. */
+export function webDrainExcludes(): JobType[] {
+  const mode = serverEnv().WEB_DRAIN_MEDIA;
+  const serverless = mode === "off" || (mode === "auto" && Boolean(process.env.VERCEL));
+  return serverless ? LONG_JOB_TYPES : [];
 }
 
 /**
@@ -21,7 +29,7 @@ export function kickWorker() {
   if (process.env.INLINE_WORKER === "off") return;
   after(async () => {
     try {
-      await drainQueue(db(), { budgetMs: 50_000, concurrency: serverEnv().WORKER_CONCURRENCY });
+      await drainQueue(db(), { budgetMs: 50_000, concurrency: serverEnv().WORKER_CONCURRENCY, excludeTypes: webDrainExcludes() });
     } catch (err) {
       log.error("worker.inline_failed", errorFields(err));
     }

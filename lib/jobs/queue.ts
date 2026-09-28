@@ -92,11 +92,18 @@ export async function enqueueJob(sql: Sql, spec: EnqueueSpec): Promise<string | 
 }
 
 /** Claims up to `limit` runnable jobs for this worker. */
-export async function claimJobs(sql: Sql, workerId: string, limit: number): Promise<JobRow[]> {
+export async function claimJobs(
+  sql: Sql,
+  workerId: string,
+  limit: number,
+  options: { excludeTypes?: JobType[] } = {},
+): Promise<JobRow[]> {
+  const exclude = options.excludeTypes ?? [];
   return sql<JobRow[]>`
     with next as (
       select id from public.jobs
       where status = 'queued' and run_after <= now()
+        ${exclude.length ? sql`and type not in ${sql(exclude)}` : sql``}
       order by priority, run_after
       for update skip locked
       limit ${limit}

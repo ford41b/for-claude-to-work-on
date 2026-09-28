@@ -46,6 +46,15 @@ describe("job queue", () => {
     expect(s2).toBe("failed");
   });
 
+  it("leaves excluded job types for another worker", async () => {
+    const id = await enqueueJob(db(), { userId: user.id, type: "ANALYZE_AUDIO", priority: 0 });
+    const skipped = await claimJobs(db(), "web-drain", 10, { excludeTypes: ["ANALYZE_VIDEO", "ANALYZE_AUDIO"] });
+    expect(skipped.map((j) => j.id)).not.toContain(id);
+    const claimed = await claimJobs(db(), "worker", 10);
+    expect(claimed.map((j) => j.id)).toContain(id);
+    await db()`update public.jobs set status = 'cancelled' where user_id = ${user.id} and status in ('queued', 'running')`;
+  });
+
   it("does not retry permanent failures", async () => {
     const id = await enqueueJob(db(), { userId: user.id, type: "GENERATE_QUIZ", priority: 0 });
     const [job] = (await claimJobs(db(), "w3", 50)).filter((j) => j.id === id);

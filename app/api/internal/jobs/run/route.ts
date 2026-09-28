@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { serverEnv } from "@/lib/config/env";
 import { db } from "@/lib/db/admin";
+import { webDrainExcludes } from "@/lib/http/context";
 import { AppError } from "@/lib/http/errors";
 import { json, route } from "@/lib/http/route";
 import { drainQueue } from "@/lib/jobs/runner";
@@ -20,7 +21,7 @@ async function handler(req: Request) {
   if (!authorized(req.headers.get("authorization"), env.CRON_SECRET)) {
     throw new AppError("unauthorized", "Not allowed.");
   }
-  const processed = await drainQueue(db(), { budgetMs: 240_000, concurrency: env.WORKER_CONCURRENCY });
+  const processed = await drainQueue(db(), { budgetMs: 240_000, concurrency: env.WORKER_CONCURRENCY, excludeTypes: webDrainExcludes() });
   return json({ processed });
 }
 

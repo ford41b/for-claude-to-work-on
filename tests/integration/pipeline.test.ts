@@ -5,11 +5,12 @@ import { fixtureEmbedding } from "@/lib/ai/providers/fixture";
 import { closeDb, db } from "@/lib/db/admin";
 import { drainQueue } from "@/lib/jobs/runner";
 import { addCapture, saveNote } from "@/lib/notes/service";
+import { correctOcr } from "@/lib/pack/corrections";
 import { askQuestion, type AskEvent } from "@/lib/retrieval/ask";
 import { updateReviewItem } from "@/lib/review/service";
 import { requestStudy } from "@/lib/study/service";
 import { vectorLiteral } from "@/lib/retrieval/chunk";
-import { createSermon, finishSermon, rebuildPack, type ServiceContext } from "@/lib/sermons/service";
+import { createSermon, finishSermon, rebuildPack, retrySource, type ServiceContext } from "@/lib/sermons/service";
 import { getProcessingStatus } from "@/lib/sermons/status";
 import { completeUpload, requestUpload } from "@/lib/uploads/service";
 import { createTestUser, deleteTestUser, type TestUser } from "./helpers";
@@ -224,6 +225,34 @@ describe("sermon processing pipeline (synthetic AI provider)", () => {
     expect(after?.due_on).toBeTruthy();
   });
 
+  it("keeps a corrected photo transcription when the photo is processed again", async () => {
+    const { data: photo } = await alice.client.from("photos").select("source_id").eq("sermon_id", sermonId).single();
+    const photoSourceId = photo!.source_id;
+    const corrected = "Faith in the Waiting\nRomans 8:24-25\n• Waiting is active trust";
+    await correctOcr(ctx, photoSourceId, { text: corrected });
+    const { data: stale } = await alice.client.from("sermons").select("pack_stale, current_pack_id").eq("id", sermonId).single();
+    expect(stale?.pack_stale).toBe(true);
+
+    // Reprocessing the photo adds an AI version but must not replace the listener's text.
+    await retrySource(ctx, photoSourceId);
+    await drain();
+    const { data: versions } = await alice.client
+      .from("ocr_extractions")
+      .select("id, origin, is_current, full_text")
+      .eq("photo_source_id", photoSourceId)
+      .order("version");
+    const current = versions!.filter((v) => v.is_current);
+    expect(current).toEqual([expect.objectContaining({ origin: "user", full_text: corrected })]);
+    expect(versions!.filter((v) => v.origin === "ai").length).toBeGreaterThanOrEqual(2);
+    const { data: after } = await alice.client.from("photos").select("current_ocr_id").eq("source_id", photoSourceId).single();
+    expect(after?.current_ocr_id).toBe(current[0]!.id);
+
+    // The debounced rebuild picks up the corrected text.
+    const { data: rebuilt } = await alice.client.from("sermons").select("pack_stale, current_pack_id").eq("id", sermonId).single();
+    expect(rebuilt?.pack_stale).toBe(false);
+    expect(rebuilt?.current_pack_id).not.toBe(stale?.current_pack_id);
+  });
+
   it("explains private videos and falls back without retrying", async () => {
     const created = await createSermon(ctx, { youtubeUrl: "https://www.youtube.com/watch?v=Fx7Private1" });
     await drain();
@@ -232,5 +261,18 @@ describe("sermon processing pipeline (synthetic AI provider)", () => {
     expect(src!.error_message).toMatch(/can't be analyzed directly from its YouTube URL/);
     const { data: jobs } = await alice.client.from("jobs").select("status, attempt_count").eq("sermon_id", created.id).eq("type", "ANALYZE_VIDEO");
     expect(jobs).toEqual([{ status: "failed", attempt_count: 1 }]);
+  });
+
+  it("refuses to answer until there is something indexed, without saving the question", async () => {
+    const pending = await createSermon(ctx, { title: "Still indexing" });
+    await saveNote(ctx, pending.noteId, { baseVersion: 1, title: "Notes", content: noteDoc });
+    await finishSermon(ctx, pending.id);
+    await expect(askQuestion(ctx, pending.id, { question: "What did I write?" }, () => {})).rejects.toThrow(/still being prepared for search/);
+
+    const empty = await createSermon(ctx, { title: "Nothing yet" });
+    await expect(askQuestion(ctx, empty.id, { question: "What did I write?" }, () => {})).rejects.toThrow(/nothing from this sermon to search yet/);
+
+    const { data: threads } = await alice.client.from("chat_threads").select("id").in("sermon_id", [pending.id, empty.id]);
+    expect(threads).toEqual([]);
   });
 });

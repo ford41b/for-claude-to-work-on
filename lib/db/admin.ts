@@ -1,3 +1,4 @@
+import "server-only";
 import postgres from "postgres";
 import { serverEnv } from "@/lib/config/env";
 
