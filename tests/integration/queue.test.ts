@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, db } from "@/lib/db/admin";
+import { createSermon } from "@/lib/sermons/service";
 import { backoffSeconds, claimJobs, enqueueJob, failJob, sweepExpiredLeases } from "@/lib/jobs/queue";
 import { createTestUser, deleteTestUser, type TestUser } from "./helpers";
 
@@ -52,6 +53,22 @@ describe("job queue", () => {
     expect(skipped.map((j) => j.id)).not.toContain(id);
     const claimed = await claimJobs(db(), "worker", 10);
     expect(claimed.map((j) => j.id)).toContain(id);
+    await db()`update public.jobs set status = 'cancelled' where user_id = ${user.id} and status in ('queued', 'running')`;
+  });
+
+  it("lets serverless drains take YouTube analysis but not uploaded media", async () => {
+    const sermon = await createSermon({ supabase: user.client, userId: user.id, sql: db() }, { youtubeUrl: "https://youtu.be/Fx7QueueYt1" });
+    await db()`update public.jobs set status = 'cancelled' where user_id = ${user.id} and status in ('queued', 'running')`;
+    const [source] = await db()<{ source_id: string }[]>`select source_id from public.video_sources where sermon_id = ${sermon.id}`;
+    const youtubeJob = await enqueueJob(db(), { userId: user.id, sermonId: sermon.id, sourceId: source!.source_id, type: "ANALYZE_VIDEO", priority: 0 });
+    const uploadJob = await enqueueJob(db(), { userId: user.id, type: "ANALYZE_VIDEO", priority: 0 });
+    const exclude: ("ANALYZE_VIDEO" | "ANALYZE_AUDIO")[] = ["ANALYZE_VIDEO", "ANALYZE_AUDIO"];
+
+    const strict = await claimJobs(db(), "web-drain", 10, { excludeTypes: exclude });
+    expect(strict.map((j) => j.id)).not.toContain(youtubeJob);
+    const serverless = await claimJobs(db(), "web-drain", 10, { excludeTypes: exclude, allowYouTubeVideo: true });
+    expect(serverless.map((j) => j.id)).toContain(youtubeJob);
+    expect(serverless.map((j) => j.id)).not.toContain(uploadJob);
     await db()`update public.jobs set status = 'cancelled' where user_id = ${user.id} and status in ('queued', 'running')`;
   });
 

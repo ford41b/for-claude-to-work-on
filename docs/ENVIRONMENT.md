@@ -34,7 +34,7 @@ naming the variable. The template is `.env.example`.
 | `CRON_SECRET` | Production | Bearer token for `POST /api/internal/jobs/run`, compared in constant time. Without it that endpoint refuses every request. |
 | `WORKER_CONCURRENCY` | No (3) | Jobs one worker runs in parallel (1–16) |
 | `WORKER_HEALTH_PORT` | No | When set, `npm run worker` serves `{"status":"ok"}` on that port for probes |
-| `WEB_DRAIN_MEDIA` | No (`auto`) | Whether after-request and cron drains may run the long `ANALYZE_VIDEO`/`ANALYZE_AUDIO` jobs. `auto` means yes, except on Vercel (detected from `VERCEL`), where a function can be stopped mid-job. There, only the long-running worker runs them. |
+| `WEB_DRAIN_MEDIA` | No (`auto`) | Whether after-request and cron drains may run the long `ANALYZE_VIDEO`/`ANALYZE_AUDIO` jobs. `auto` means yes, except on Vercel (detected from `VERCEL`), where a function can be stopped mid-job. There, web drains still run YouTube analysis (one provider request, cut to fit the function) but leave uploaded recordings to the long-running worker. `off` leaves all media analysis to the worker. |
 | `INLINE_WORKER` | No | `off` stops web requests from draining the queue in the background after they enqueue work (see `kickWorker`) |
 | `LOG_LEVEL` | No (`info`) | `debug`, `info`, `warn` or `error`. Logs are structured JSON and never include note, transcription or answer text. |
 

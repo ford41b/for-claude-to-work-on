@@ -3,6 +3,9 @@ import { kickWorker, serviceContext } from "@/lib/http/context";
 import { json, readJson, route } from "@/lib/http/route";
 import { createSermon, createSermonSchema } from "@/lib/sermons/service";
 
+// The background drain (kickWorker) runs inside this function; see DRAIN_FUNCTION_SECONDS.
+export const maxDuration = 300;
+
 export const POST = route("sermons.create", async (req) => {
   const ctx = await serviceContext();
   const input = await readJson(req, createSermonSchema);

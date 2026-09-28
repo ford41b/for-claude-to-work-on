@@ -64,7 +64,7 @@ which provider receives which content.
 | Topic | Limitation | How the app handles it |
 |---|---|---|
 | **Cron** | Hobby plans allow only daily cron jobs; Pro allows per-minute. | The cron drain is optional. A long-running worker is the primary runner. |
-| **Function duration** | Functions are stopped at their maximum duration. | On Vercel, web-tier drains skip media analysis (`WEB_DRAIN_MEDIA=auto`), and the worker runs it. |
+| **Function duration** | Functions are stopped at their maximum duration. | On Vercel, web-tier drains run YouTube analysis within the function limit and skip uploaded-recording analysis (`WEB_DRAIN_MEDIA=auto`), which the worker runs. |
 
 ## Bible text
 

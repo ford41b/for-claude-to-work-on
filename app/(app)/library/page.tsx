@@ -8,6 +8,9 @@ import { requirePageUser } from "@/lib/auth/session";
 import { BIBLE_BOOKS, getBook } from "@/lib/bible/books";
 import { normalizeReference } from "@/lib/bible/reference";
 import { cn } from "@/lib/client/cn";
+import { SERMON_ROW_COLUMNS } from "@/lib/sermons/format";
+import { VERSES } from "@/lib/bible/verses";
+import { Verse } from "@/components/scripture/verse";
 
 export const metadata: Metadata = { title: "Library" };
 
@@ -51,7 +54,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
   if (results.error) throw results.error;
   const ids = (results.data ?? []).map((r) => r.sermon_id);
   const { data: sermons } = ids.length
-    ? await supabase.from("sermons").select("id, title, speaker, church, preached_on, created_at, status, big_idea").in("id", ids)
+    ? await supabase.from("sermons").select(SERMON_ROW_COLUMNS).in("id", ids)
     : { data: [] as SermonRowData[] };
   const byId = new Map((sermons ?? []).map((s) => [s.id, s as SermonRowData]));
   const ordered = filtering
@@ -165,6 +168,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
       ) : (
         <div className="flex flex-col items-start gap-4 py-6">
           <p className="text-ink-muted">Your sermon notebooks will appear here.</p>
+          <Verse verse={VERSES.hidden} size="sm" />
           <ButtonLink href="/sermons/new" variant="primary">
             Start your first sermon
           </ButtonLink>

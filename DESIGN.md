@@ -249,7 +249,7 @@ listener captured or corrected drop the "~". A time is never shown without that 
 Mobile-first. A 16px side gutter on phones; content columns cap at `max-w-6xl` (72rem).
 
 - **App shell:** phones get a fixed four-item bottom nav (Home, Library, Study, Profile) with
-  safe-area padding; from `md` (768px) it becomes a 15rem left rail with the "New sermon" action.
+  safe-area padding; from `md` (768px) it becomes a 15.5rem left rail read like a notebook's inside cover: the wordmark (pen dot + Literata), a quiet "New sermon" entry, a ruled contents list whose active entry carries a pen-ink dot, the five most recent sermons in Literata, and a verse at the foot.
 - **Notebook:** a sticky header (back link, title, metadata, tab row: Overview · Notes · Sermon ·
   Study · More). Tabs scroll horizontally and never wrap. On phones the player collapses to a
   slim sticky bar under the tabs; from `lg` (1024px) it moves to a sticky right rail beside the
@@ -351,7 +351,7 @@ clipped into circles.
 ### Don't:
 - **Don't** add a second accent color or tint generated content blue.
 - **Don't** give resting cards a drop shadow; shadows are for sheets, toasts, the composer, and popovers.
-- **Don't** show verse text unless a licensed Bible text provider supplied it.
+- **Don't** show verse text unless a licensed Bible text provider supplied it. The one exception is the fixed public-domain World English Bible verses in `lib/bible/verses.ts` (sidebar foot, sign-in, study, empty states), set with `Verse`: italic Literata in Faded Ink, reference and "WEB" beneath.
 - **Don't** present a quote in quotation marks unless its evidence says it was heard or written word-for-word; paraphrases are labelled "PARAPHRASE" without quote marks.
 - **Don't** disable a submit button to signal validation; explain the problem beside the field.
 - **Don't** let tab labels or chip labels wrap; they scroll or truncate.

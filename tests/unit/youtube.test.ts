@@ -1,3 +1,4 @@
+import { youtubeThumbnail } from "@/lib/sermons/format";
 import { describe, expect, it } from "vitest";
 import { parseYouTubeTime, parseYouTubeUrl } from "@/lib/youtube/parse";
 
@@ -58,5 +59,19 @@ describe("parseYouTubeTime", () => {
     expect(parseYouTubeTime("2m")).toBe(120);
     expect(parseYouTubeTime("bogus")).toBeNull();
     expect(parseYouTubeTime(null)).toBeNull();
+  });
+});
+
+describe("youtubeThumbnail", () => {
+  it("uses the 16:9 rendition of the sermon's YouTube video", () => {
+    expect(youtubeThumbnail({ video_sources: [{ origin: "youtube", youtube_video_id: "Fx7WaitSrm1" }] })).toBe(
+      "https://i.ytimg.com/vi/Fx7WaitSrm1/mqdefault.jpg",
+    );
+  });
+
+  it("returns null for uploaded video or no video", () => {
+    expect(youtubeThumbnail({ video_sources: [{ origin: "upload", youtube_video_id: null }] })).toBeNull();
+    expect(youtubeThumbnail({ video_sources: [] })).toBeNull();
+    expect(youtubeThumbnail({})).toBeNull();
   });
 });

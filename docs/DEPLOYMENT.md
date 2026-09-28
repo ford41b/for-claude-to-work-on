@@ -18,7 +18,7 @@ The web app and worker share one codebase and one environment.
 |---|---|---|---|
 | **A. One Node host** (VM, container platform) | `npm start` | `npm run worker` in a second process | Simplest setup. Long media analysis runs fine. |
 | **B. Vercel + worker container** (recommended at scale) | Vercel | A long-running container (Fly.io, Railway, Render, Cloud Run with a minimum instance, …) running `npm run worker` | Serverless web tier. Media analysis runs in the worker. |
-| C. Vercel only | Vercel | Vercel Cron → `/api/internal/jobs/run` | **Not enough for recordings.** Serverless functions are stopped at their time limit, so on Vercel the web-tier drains never claim `ANALYZE_VIDEO`/`ANALYZE_AUDIO` (`WEB_DRAIN_MEDIA=auto`). Photos, documents, packs, embeddings and studies still process; media analysis waits for a worker. |
+| C. Vercel only | Vercel | After-request drains (including while a sermon page polls its status) and, optionally, Vercel Cron → `/api/internal/jobs/run` | **Enough for YouTube sermons, not for uploaded recordings.** Serverless functions are stopped at their time limit (`maxDuration` 300 s on the draining routes). A YouTube analysis is one provider request, so web-tier drains run it with its time limit cut to fit the function; an attempt that runs out retries. Uploaded recordings (`ANALYZE_AUDIO`, uploaded `ANALYZE_VIDEO`) need a download and re-upload, so they still wait for a worker (`WEB_DRAIN_MEDIA=auto`). |
 
 However many runners you use, each job is claimed exactly once (`FOR UPDATE SKIP LOCKED`
 with leases). Running the worker, the after-request drain and the cron drain together is safe.

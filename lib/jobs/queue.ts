@@ -96,15 +96,22 @@ export async function claimJobs(
   sql: Sql,
   workerId: string,
   limit: number,
-  options: { excludeTypes?: JobType[] } = {},
+  options: { excludeTypes?: JobType[]; allowYouTubeVideo?: boolean } = {},
 ): Promise<JobRow[]> {
   const exclude = options.excludeTypes ?? [];
+  // A YouTube analysis is one provider request (no file transfer), so it can run where other
+  // excluded media jobs can't, such as a serverless function.
+  const youtubeException =
+    options.allowYouTubeVideo && exclude.includes("ANALYZE_VIDEO")
+      ? sql`or (j0.type = 'ANALYZE_VIDEO' and exists (
+            select 1 from public.video_sources v where v.source_id = j0.source_id and v.origin = 'youtube'))`
+      : sql``;
   return sql<JobRow[]>`
     with next as (
-      select id from public.jobs
-      where status = 'queued' and run_after <= now()
-        ${exclude.length ? sql`and type not in ${sql(exclude)}` : sql``}
-      order by priority, run_after
+      select j0.id from public.jobs j0
+      where j0.status = 'queued' and j0.run_after <= now()
+        ${exclude.length ? sql`and (j0.type not in ${sql(exclude)} ${youtubeException})` : sql``}
+      order by j0.priority, j0.run_after
       for update skip locked
       limit ${limit}
     )

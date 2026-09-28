@@ -4,6 +4,8 @@ import Link from "next/link";
 import { ReviewList } from "@/components/review/review-list";
 import { requirePageUser } from "@/lib/auth/session";
 import { displayTitle } from "@/lib/sermons/format";
+import { VERSES } from "@/lib/bible/verses";
+import { Verse } from "@/components/scripture/verse";
 
 export const metadata: Metadata = { title: "Study" };
 
@@ -58,6 +60,7 @@ export default async function StudyHubPage() {
       <div>
         <h1 className="text-2xl font-bold">Study</h1>
         <p className="mt-2 text-ink-muted">A few things to revisit from recent sermons. Take them at your own pace.</p>
+        <Verse verse={VERSES.doers} size="sm" className="mt-5" />
       </div>
 
       <section aria-labelledby="review-title">

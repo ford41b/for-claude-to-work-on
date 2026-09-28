@@ -3,8 +3,7 @@ import { after } from "next/server";
 import { requireUser } from "@/lib/auth/session";
 import { serverEnv } from "@/lib/config/env";
 import { db } from "@/lib/db/admin";
-import type { JobType } from "@/lib/jobs/queue";
-import { drainQueue, LONG_JOB_TYPES } from "@/lib/jobs/runner";
+import { drainQueue, LONG_JOB_TYPES, type BatchOptions } from "@/lib/jobs/runner";
 import { errorFields, log } from "@/lib/observability/log";
 import type { ServiceContext } from "@/lib/sermons/service";
 
@@ -13,11 +12,24 @@ export async function serviceContext(): Promise<ServiceContext> {
   return { supabase, userId: user.id, sql: db() };
 }
 
-/** Job types that web-tier drains (after-request and cron) must leave to the long-running worker. */
-export function webDrainExcludes(): JobType[] {
+/** Time a serverless function may run; routes that drain the queue export this as `maxDuration`. */
+export const DRAIN_FUNCTION_SECONDS = 300;
+
+/**
+ * How web-tier drains (after-request and cron) run on this host. On serverless hosts they leave
+ * uploaded-media analysis to the long-running worker, since downloading and re-uploading a
+ * recording can outlast the function. A YouTube analysis is a single provider request, so it runs
+ * here, cut short before the function's end (`startedAt` + DRAIN_FUNCTION_SECONDS).
+ */
+export function webDrainOptions(startedAt: number = Date.now()): BatchOptions {
   const mode = serverEnv().WEB_DRAIN_MEDIA;
   const serverless = mode === "off" || (mode === "auto" && Boolean(process.env.VERCEL));
-  return serverless ? LONG_JOB_TYPES : [];
+  if (!serverless) return {};
+  return {
+    excludeTypes: LONG_JOB_TYPES,
+    allowYouTubeVideo: mode === "auto",
+    hardDeadline: startedAt + (DRAIN_FUNCTION_SECONDS - 20) * 1000,
+  };
 }
 
 /**
@@ -27,9 +39,10 @@ export function webDrainExcludes(): JobType[] {
  */
 export function kickWorker() {
   if (process.env.INLINE_WORKER === "off") return;
+  const startedAt = Date.now();
   after(async () => {
     try {
-      await drainQueue(db(), { budgetMs: 50_000, concurrency: serverEnv().WORKER_CONCURRENCY, excludeTypes: webDrainExcludes() });
+      await drainQueue(db(), { budgetMs: 50_000, concurrency: serverEnv().WORKER_CONCURRENCY, ...webDrainOptions(startedAt) });
     } catch (err) {
       log.error("worker.inline_failed", errorFields(err));
     }

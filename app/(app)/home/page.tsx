@@ -2,8 +2,9 @@ import { BookOpen, CircleHelp, Plus, Sunrise } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SermonRow, type SermonRowData } from "@/components/library/sermon-row";
+import { SermonThumbnail } from "@/components/library/sermon-thumbnail";
 import { ReviewList } from "@/components/review/review-list";
-import { displayTitle } from "@/lib/sermons/format";
+import { displayTitle, SERMON_ROW_COLUMNS, youtubeThumbnail } from "@/lib/sermons/format";
 import { Greeting } from "@/components/shell/greeting";
 import { ButtonLink } from "@/components/ui/button";
 import { requirePageUser } from "@/lib/auth/session";
@@ -14,7 +15,7 @@ export default async function HomePage() {
   const { supabase, user } = await requirePageUser("/home");
   const [profile, sermons, review, questions, scripture] = await Promise.all([
     supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
-    supabase.from("sermons").select("id, title, speaker, church, preached_on, created_at, status, big_idea, updated_at").order("updated_at", { ascending: false }).limit(6),
+    supabase.from("sermons").select(`${SERMON_ROW_COLUMNS}, updated_at`).order("updated_at", { ascending: false }).limit(6),
     supabase
       .from("review_items")
       .select("id, kind, prompt, detail, status, sermon_id, sermons(title, created_at, preached_on)")
@@ -72,8 +73,13 @@ export default async function HomePage() {
           <h2 id="continue-title" className="label-caps">
             Continue
           </h2>
-          <p className="reading mt-2 text-xl font-semibold">{displayTitle(continueSermon)}</p>
-          <p className="mt-1 text-sm text-ink-muted">In progress — finish it when the sermon ends to build your Sermon Pack.</p>
+          <div className="mt-2 flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="reading text-xl font-semibold">{displayTitle(continueSermon)}</p>
+              <p className="mt-1 text-sm text-ink-muted">In progress — finish it when the sermon ends to build your Sermon Pack.</p>
+            </div>
+            {youtubeThumbnail(continueSermon) ? <SermonThumbnail src={youtubeThumbnail(continueSermon)!} className="w-28 sm:w-44" /> : null}
+          </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <ButtonLink href={`/sermons/${continueSermon.id}/notes`} variant="secondary">
               Open notes

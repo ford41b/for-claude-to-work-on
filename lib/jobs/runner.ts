@@ -80,7 +80,17 @@ export async function onTerminalFailure(sql: Sql, job: JobRow, failure: Pick<Fai
   }
 }
 
-export async function runJob(sql: Sql, job: JobRow, workerId: string): Promise<"succeeded" | "retry" | "failed"> {
+/**
+ * `deadline` (epoch ms) is when the host will stop this process, as in a serverless function.
+ * The attempt's time limit is cut short to end before it, so the job fails cleanly and retries
+ * instead of being killed mid-run and waiting out its lease.
+ */
+export async function runJob(
+  sql: Sql,
+  job: JobRow,
+  workerId: string,
+  options: { deadline?: number } = {},
+): Promise<"succeeded" | "retry" | "failed"> {
   const handler = HANDLERS[job.type];
   const started = Date.now();
   if (!handler) {
@@ -90,7 +100,9 @@ export async function runJob(sql: Sql, job: JobRow, workerId: string): Promise<"
     return "failed";
   }
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(new AIError("timeout", { detail: "job time limit reached" })), TIMEOUT_MS[job.type] ?? DEFAULT_TIMEOUT_MS);
+  const limitMs = TIMEOUT_MS[job.type] ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = options.deadline ? Math.max(1_000, Math.min(limitMs, options.deadline - Date.now())) : limitMs;
+  const timeout = setTimeout(() => controller.abort(new AIError("timeout", { detail: "job time limit reached" })), timeoutMs);
   const beat = setInterval(() => void heartbeat(sql, job, workerId).catch(() => {}), 60_000);
   const ctx: JobContext = {
     job,
@@ -130,27 +142,42 @@ export async function runJob(sql: Sql, job: JobRow, workerId: string): Promise<"
   }
 }
 
+/** A YouTube analysis is only started when at least this much of the host's time is left. */
+export const MIN_YOUTUBE_ANALYSIS_MS = 150_000;
+
+export interface BatchOptions {
+  excludeTypes?: JobType[];
+  /** Still claim ANALYZE_VIDEO for YouTube sources when it is in `excludeTypes`. */
+  allowYouTubeVideo?: boolean;
+  /** When the host stops this process (epoch ms); see runJob. */
+  hardDeadline?: number;
+}
+
 /** Claims and runs one batch. Returns the number of jobs processed. */
-export async function processBatch(sql: Sql, workerId: string, limit: number, excludeTypes: JobType[] = []): Promise<number> {
+export async function processBatch(sql: Sql, workerId: string, limit: number, options: BatchOptions = {}): Promise<number> {
   const expired = await sweepExpiredLeases(sql);
   for (const job of expired.filter((j) => j.status === "failed")) {
     await onTerminalFailure(sql, job, { code: job.error_code ?? "lease_expired", message: job.last_error ?? "Processing stopped unexpectedly." });
   }
-  const jobs = await claimJobs(sql, workerId, limit, { excludeTypes });
-  await Promise.all(jobs.map((job) => runJob(sql, job, workerId)));
+  const timeLeft = options.hardDeadline ? options.hardDeadline - Date.now() : Infinity;
+  const jobs = await claimJobs(sql, workerId, limit, {
+    excludeTypes: options.excludeTypes,
+    allowYouTubeVideo: options.allowYouTubeVideo && timeLeft >= MIN_YOUTUBE_ANALYSIS_MS,
+  });
+  await Promise.all(jobs.map((job) => runJob(sql, job, workerId, { deadline: options.hardDeadline })));
   return jobs.length;
 }
 
 /** Drains the queue until it is empty or the time budget is spent (serverless runner). */
 export async function drainQueue(
   sql: Sql,
-  options: { budgetMs: number; concurrency: number; workerId?: string; excludeTypes?: JobType[] },
+  options: { budgetMs: number; concurrency: number; workerId?: string } & BatchOptions,
 ): Promise<number> {
   const workerId = options.workerId ?? newWorkerId();
   const deadline = Date.now() + options.budgetMs;
   let total = 0;
   while (Date.now() < deadline) {
-    const n = await processBatch(sql, workerId, options.concurrency, options.excludeTypes);
+    const n = await processBatch(sql, workerId, options.concurrency, options);
     total += n;
     if (n === 0) break;
   }

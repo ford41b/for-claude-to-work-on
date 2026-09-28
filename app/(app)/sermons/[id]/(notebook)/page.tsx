@@ -14,6 +14,8 @@ import { requirePageUser } from "@/lib/auth/session";
 import { isAIConfigured } from "@/lib/ai/registry";
 import { citationsFor, getCitations, getNotebookHeader, getPhotos, getPreliminaryAnalysis, type CitationView } from "@/lib/queries/notebook";
 import { getNotesWithBlocks, getPackItems } from "@/lib/queries/pack";
+import { VERSES } from "@/lib/bible/verses";
+import { Verse } from "@/components/scripture/verse";
 
 export const metadata: Metadata = { title: "Overview" };
 
@@ -200,7 +202,10 @@ export default async function OverviewPage({ params }: { params: Promise<{ id: s
             {noteText.split("\n").length > 8 ? <span className="text-ink-muted"> …</span> : null}
           </div>
         ) : (
-          <p className="text-ink-muted">No notes yet. Your notes stay exactly as you write them — AI never rewrites them.</p>
+          <>
+            <p className="text-ink-muted">No notes yet. Your notes stay exactly as you write them — AI never rewrites them.</p>
+            <Verse verse={VERSES.pondering} size="sm" className="mt-4" />
+          </>
         )}
         {userQuestions.length ? (
           <ul className="mt-4 flex flex-col gap-2">
