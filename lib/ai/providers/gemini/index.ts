@@ -70,7 +70,7 @@ function toPart(part: ContentPart, withTuning: boolean): Part {
 
 /**
  * Request shapes tried in order when Gemini answers 400 INVALID_ARGUMENT without saying which
- * field it refused: first everything, then without the optional tuning (frame rate, media
+ * field it refused, or 500 INTERNAL (see isInternalError): first everything, then without the optional tuning (frame rate, media
  * resolution, thinking level), then without the response schema (the prompt carries it instead
  * and runPrompt still validates the output). A 400 is not billed, so the fallbacks cost nothing.
  */
@@ -84,15 +84,47 @@ function isGenericInvalidArgument(err: unknown): boolean {
   return !/(token count|too long|exceeds the maximum|api key|video unavailable|private)/.test(lower);
 }
 
+/**
+ * Gemini answers some requests it cannot serve (notably a large response schema combined with a
+ * thinking budget) with 500 INTERNAL every time, rather than a 400. Unlike 503 (overloaded) or
+ * 504 (deadline), retrying the identical request rarely helps, so a 500 also moves on to the
+ * simpler request shapes. Failed requests are not billed.
+ */
+function isInternalError(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 500;
+}
+
+/** Names, codes and messages along an error's `cause` chain (undici hides the real reason there). */
+function describeCauses(err: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = err instanceof Error ? err.cause : undefined;
+  for (let depth = 0; current && depth < 4; depth++) {
+    if (current instanceof Error) {
+      const code = (current as Error & { code?: unknown }).code;
+      parts.push([current.name, typeof code === "string" ? code : null, current.message].filter(Boolean).join(" "));
+      current = current.cause;
+    } else {
+      parts.push(String(current));
+      break;
+    }
+  }
+  return parts.join(" <- ");
+}
+
 /** Maps Gemini API failures onto provider-neutral codes. */
-export function classifyGeminiError(err: unknown, context: { hasYouTube: boolean }): AIError {
+export function classifyGeminiError(err: unknown, context: { hasYouTube: boolean; model?: string; promptId?: string }): AIError {
   if (err instanceof AIError) return err;
   const message = err instanceof Error ? err.message : String(err);
-  const lower = message.toLowerCase();
+  const causes = describeCauses(err);
+  const lower = `${message} ${causes}`.toLowerCase();
   const status = err instanceof ApiError ? err.status : undefined;
-  const detail = `${status ?? ""} ${message}`.trim().slice(0, 1000);
+  const where = [context.model ? `model=${context.model}` : null, context.promptId ? `prompt=${context.promptId}` : null].filter(Boolean).join(" ");
+  const detail = [where ? `[${where}]` : null, status, message, causes ? `(cause: ${causes})` : null].filter(Boolean).join(" ").slice(0, 1500);
 
-  if (err instanceof Error && (err.name === "AbortError" || lower.includes("timed out") || lower.includes("timeout"))) {
+  if (
+    err instanceof Error &&
+    (err.name === "AbortError" || /timed out|timeout|und_err_headers_timeout|und_err_body_timeout|etimedout/.test(lower))
+  ) {
     return new AIError("timeout", { detail });
   }
   let code: AIErrorCode = "unavailable";
@@ -165,7 +197,7 @@ export class GeminiProvider implements ModelProvider {
         },
       };
     } catch (err) {
-      throw classifyGeminiError(err, { hasYouTube });
+      throw classifyGeminiError(err, { hasYouTube, model, promptId: req.trace.promptId });
     }
   }
 
@@ -205,7 +237,7 @@ export class GeminiProvider implements ModelProvider {
         }
         return response;
       } catch (err) {
-        if (!isGenericInvalidArgument(err) || shape === SHAPES[SHAPES.length - 1]) {
+        if (!(isGenericInvalidArgument(err) || isInternalError(err)) || shape === SHAPES[SHAPES.length - 1]) {
           if (refusals.length && err instanceof Error) err.message = `${err.message} (after fallbacks: ${refusals.join(" | ")})`;
           throw err;
         }
@@ -237,7 +269,7 @@ export class GeminiProvider implements ModelProvider {
         for (const e of embeddings) vectors.push(normalize(e.values ?? []));
       }
     } catch (err) {
-      throw classifyGeminiError(err, { hasYouTube: false });
+      throw classifyGeminiError(err, { hasYouTube: false, model: this.embeddingModel, promptId: "embed" });
     }
     // Token counts are not returned by embedContent; estimate ~4 chars/token for cost tracking.
     const estimated = Math.ceil(req.texts.reduce((n, t) => n + t.length, 0) / 4);

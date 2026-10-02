@@ -14,7 +14,8 @@ export interface Stage {
   state: StageState;
   detail: string | null;
   progress: number | null;
-  error: { code: string; message: string } | null;
+  /** `detail` is the provider's own error text, for troubleshooting; it never contains user content. */
+  error: { code: string; message: string; detail: string | null } | null;
 }
 
 export interface ProcessingStatus {
@@ -35,9 +36,29 @@ interface JobLite {
   progress: number;
   last_error: string | null;
   error_code: string | null;
+  result?: unknown;
   source_id: string | null;
   updated_at: string;
   created_at: string;
+}
+
+/**
+ * Retryable failures are stored with "we'll retry" wording while retries remain. Once a job has
+ * failed for good, that promise is no longer true, so say what happened and what to do.
+ */
+const FINAL_MESSAGES: Record<string, string> = {
+  unavailable: "The AI service didn't respond after several tries. Try again in a few minutes.",
+  rate_limited: "The AI service stayed busy after several tries. Try again in a few minutes.",
+  timeout: "This step took too long after several tries. Try again in a few minutes.",
+  invalid_output: "The AI kept returning incomplete results. Try again in a few minutes.",
+  internal: "Something went wrong after several tries. Try again in a few minutes.",
+  lease_expired: "Processing stopped before it finished. Try again.",
+};
+
+function errorDetail(result: unknown): string | null {
+  if (!result || typeof result !== "object") return null;
+  const detail = (result as { error_detail?: unknown }).error_detail;
+  return typeof detail === "string" && detail.trim() ? detail : null;
 }
 
 const STAGE_DEFS: { key: StageKey; label: string; types: Enums<"job_type">[] }[] = [
@@ -83,7 +104,14 @@ export function computeStatus(input: {
       state,
       detail: running?.stage ?? (queued ? (queued.last_error ? "Retrying soon" : "Waiting to start") : countNote),
       progress: running ? running.progress : null,
-      error: firstFailure ? { code: firstFailure.error_code ?? "failed", message: firstFailure.last_error ?? "This step failed." } : null,
+      error: firstFailure
+        ? {
+            code: firstFailure.error_code ?? "failed",
+            message: FINAL_MESSAGES[firstFailure.error_code ?? ""] ?? firstFailure.last_error ?? "This step failed.",
+            // Provider error text helps the owner troubleshoot; internal errors stay in server logs.
+            detail: firstFailure.error_code === "internal" ? null : errorDetail(firstFailure.result),
+          }
+        : null,
     });
   }
 
@@ -117,7 +145,7 @@ export async function getProcessingStatus(supabase: AppSupabaseClient, sermonId:
     supabase.from("sermons").select("status, pack_stale, current_pack_id, ai_artifacts!sermons_current_pack_fk(version)").eq("id", sermonId).maybeSingle(),
     supabase
       .from("jobs")
-      .select("id, type, status, stage, progress, last_error, error_code, source_id, updated_at, created_at")
+      .select("id, type, status, stage, progress, last_error, error_code, result, source_id, updated_at, created_at")
       .eq("sermon_id", sermonId)
       .order("created_at", { ascending: false })
       .limit(200),

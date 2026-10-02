@@ -151,6 +151,15 @@ describe("classifyGeminiError", () => {
     expect(classifyGeminiError(api(403, "Method doesn't allow unregistered callers. Please use API Key."), yt).code).toBe("auth_failed");
     expect(classifyGeminiError(api(400, "The input token count (1200000) exceeds the maximum number of tokens allowed (1048576)."), yt).code).toBe("media_too_long");
   });
+  it("reads network failures from the error's cause chain", () => {
+    const headersTimeout = new TypeError("fetch failed", { cause: Object.assign(new Error("Headers Timeout Error"), { name: "HeadersTimeoutError", code: "UND_ERR_HEADERS_TIMEOUT" }) });
+    expect(classifyGeminiError(headersTimeout, { hasYouTube: false })).toMatchObject({ code: "timeout", retryable: true });
+    const reset = new TypeError("fetch failed", { cause: Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" }) });
+    const classified = classifyGeminiError(reset, { hasYouTube: false, model: "gemini-x", promptId: "sermon-pack" });
+    expect(classified.code).toBe("unavailable");
+    expect(classified.detail).toContain("ECONNRESET");
+    expect(classified.detail).toContain("model=gemini-x");
+  });
   it("maps rate limits, outages, and auth", () => {
     expect(classifyGeminiError(api(429, "Resource has been exhausted"), { hasYouTube: false })).toMatchObject({ code: "rate_limited", retryable: true });
     expect(classifyGeminiError(api(503, "The model is overloaded"), { hasYouTube: false })).toMatchObject({ code: "unavailable", retryable: true });
@@ -204,6 +213,24 @@ describe("GeminiProvider request fallback", () => {
     const third = calls[2] as { config: Record<string, unknown> };
     expect(third.config.responseJsonSchema).toBeUndefined();
     expect(String(third.config.systemInstruction)).toContain("JSON Schema");
+  });
+
+  it("treats a 500 INTERNAL like a refused request and tries simpler shapes", async () => {
+    const internal = () => { throw new ApiError({ status: 500, message: '{"error":{"code":500,"message":"An internal error has occurred.","status":"INTERNAL"}}' }); };
+    const { provider, calls } = providerWith([internal, internal, () => ok]);
+    await expect(provider.generate(request)).resolves.toMatchObject({ text: '{"ok":true}' });
+    expect(calls).toHaveLength(3);
+    expect((calls[2] as { config: Record<string, unknown> }).config.responseJsonSchema).toBeUndefined();
+  });
+
+  it("does not change the request for an overloaded model (503), and names the model in the detail", async () => {
+    const overloaded = () => { throw new ApiError({ status: 503, message: "The model is overloaded. Please try again later." }); };
+    const { provider, calls } = providerWith([overloaded]);
+    const err = await provider.generate({ ...request, tier: "synthesis", trace: { promptId: "sermon-pack", promptVersion: "test" } }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: "unavailable", retryable: true });
+    expect((err as AIError).detail).toContain("model=m");
+    expect((err as AIError).detail).toContain("prompt=sermon-pack");
+    expect(calls).toHaveLength(1);
   });
 
   it("does not fall back for errors that are not about the request's form", async () => {

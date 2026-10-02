@@ -87,9 +87,9 @@ test.describe("North-star flow", () => {
 
     // Library search finds it by note text and by passage.
     await page.goto("/library?q=wait");
-    await expect(page.getByText("Faith in the Waiting").first()).toBeVisible();
+    await expect(page.getByText("Faith in the Waiting").filter({ visible: true }).first()).toBeVisible();
     await page.goto("/library?q=Romans%208");
-    await expect(page.getByText("Faith in the Waiting").first()).toBeVisible();
+    await expect(page.getByText("Faith in the Waiting").filter({ visible: true }).first()).toBeVisible();
     await shot(page, testInfo, "08-library");
 
     // Delete.

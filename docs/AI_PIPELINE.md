@@ -104,8 +104,17 @@ returns `null` for unknown models rather than guessing.
 
 ## Errors and retries
 
-`lib/ai/errors.ts` classifies failures. `message` is shown to users; `detail` goes only to
-job logs.
+`lib/ai/errors.ts` classifies failures. `message` is shown to users. `detail` (the provider's
+own error text, with the model and prompt id) is stored in `jobs.result.error_detail`, written
+to the `job.failed` log line, and shown under "Technical details" on a failed processing step
+(AI errors only; internal errors stay in the logs).
+
+Before a request fails, the Gemini adapter retries a refused form of it (400 INVALID_ARGUMENT,
+or a 500 INTERNAL, which Gemini returns for some large-schema requests) without the optional
+tuning, then with the schema moved into the prompt. 503/504 and network errors are not
+reshaped; they back off and retry. Network errors are classified from their `cause` chain, so a
+stalled connection is a `timeout` rather than a generic outage. Once retries run out, the step
+says so plainly ("didn't respond after several tries") instead of promising another retry.
 
 | Code | Retry | Typical cause | What the user sees |
 |---|---|---|---|

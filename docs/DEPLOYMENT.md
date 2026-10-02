@@ -109,6 +109,11 @@ for up to 240 s (`maxDuration = 300`).
 - Before launch, run `npm run eval -- --provider=gemini` and check the model metrics.
 - Watch for `quota_exceeded` and `rate_limited` job errors. Jobs record usage and estimated
   cost; query `jobs.usage`.
+- When a step fails, open "Technical details" under it, or query
+  `select type, error_code, result->>'error_detail' from jobs where status = 'failed' order by updated_at desc;`
+  for the provider's exact error, model and prompt.
+- Without a long-running worker, Vercel drains only start a Sermon Pack build when at least
+  150 s of the function's time remains (studies: 90 s); otherwise the next drain picks it up.
 
 ## 5. Launch checklist
 

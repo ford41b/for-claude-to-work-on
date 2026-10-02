@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, db } from "@/lib/db/admin";
+import { processBatch } from "@/lib/jobs/runner";
 import { createSermon } from "@/lib/sermons/service";
 import { backoffSeconds, claimJobs, enqueueJob, failJob, sweepExpiredLeases } from "@/lib/jobs/queue";
 import { createTestUser, deleteTestUser, type TestUser } from "./helpers";
@@ -70,6 +71,16 @@ describe("job queue", () => {
     expect(serverless.map((j) => j.id)).toContain(youtubeJob);
     expect(serverless.map((j) => j.id)).not.toContain(uploadJob);
     await db()`update public.jobs set status = 'cancelled' where user_id = ${user.id} and status in ('queued', 'running')`;
+  });
+
+  it("does not start a Sermon Pack build a serverless drain has no time to finish", async () => {
+    await db()`update public.jobs set status = 'cancelled' where status in ('queued', 'running')`;
+    const id = await enqueueJob(db(), { userId: user.id, type: "BUILD_SERMON_PACK", priority: 0 });
+    // One minute left on the function: the pack waits for the next drain.
+    expect(await processBatch(db(), "late-drain", 5, { hardDeadline: Date.now() + 60_000 })).toBe(0);
+    const [row] = await db()<{ status: string; attempt_count: number }[]>`select status, attempt_count from public.jobs where id = ${id}`;
+    expect(row).toEqual({ status: "queued", attempt_count: 0 });
+    await db()`update public.jobs set status = 'cancelled' where id = ${id}`;
   });
 
   it("does not retry permanent failures", async () => {

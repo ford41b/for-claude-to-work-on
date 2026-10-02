@@ -131,7 +131,16 @@ export function ProcessingStages({ sermonId, className }: { sermonId: string; cl
                 </span>
               </p>
               {s.state === "failed" && s.error ? (
-                <p className="text-sm text-ink-muted">{s.error.message}</p>
+                <>
+                  <p className="text-sm text-ink-muted">{s.error.message}</p>
+                  <details className="mt-1 text-xs text-ink-muted">
+                    <summary className="cursor-pointer font-semibold hover:text-ink">Technical details</summary>
+                    <p className="mt-1 break-words font-mono">
+                      {s.error.code}
+                      {s.error.detail ? ` — ${s.error.detail}` : ""}
+                    </p>
+                  </details>
+                </>
               ) : s.detail ? (
                 <p className="text-sm text-ink-muted">{s.detail}</p>
               ) : null}

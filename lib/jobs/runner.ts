@@ -131,6 +131,7 @@ export async function runJob(
       type: job.type,
       attempt: job.attempt_count,
       code: failure.code,
+      detail: failure.detail?.slice(0, 1500),
       will_retry: status === "queued",
       ms: Date.now() - started,
     });
@@ -144,6 +145,16 @@ export async function runJob(
 
 /** A YouTube analysis is only started when at least this much of the host's time is left. */
 export const MIN_YOUTUBE_ANALYSIS_MS = 150_000;
+
+/**
+ * Synthesis jobs make one long model request (a Sermon Pack can take a few minutes). Starting
+ * one with less time than this left on a serverless host would only end in a cut-off attempt,
+ * so it waits for the next drain instead.
+ */
+export const MIN_SYNTHESIS_MS: Partial<Record<JobType, number>> = {
+  BUILD_SERMON_PACK: 150_000,
+  GENERATE_STUDY: 90_000,
+};
 
 export interface BatchOptions {
   excludeTypes?: JobType[];
@@ -160,8 +171,9 @@ export async function processBatch(sql: Sql, workerId: string, limit: number, op
     await onTerminalFailure(sql, job, { code: job.error_code ?? "lease_expired", message: job.last_error ?? "Processing stopped unexpectedly." });
   }
   const timeLeft = options.hardDeadline ? options.hardDeadline - Date.now() : Infinity;
+  const tooLong = (Object.entries(MIN_SYNTHESIS_MS) as [JobType, number][]).filter(([, ms]) => timeLeft < ms).map(([type]) => type);
   const jobs = await claimJobs(sql, workerId, limit, {
-    excludeTypes: options.excludeTypes,
+    excludeTypes: [...(options.excludeTypes ?? []), ...tooLong],
     allowYouTubeVideo: options.allowYouTubeVideo && timeLeft >= MIN_YOUTUBE_ANALYSIS_MS,
   });
   await Promise.all(jobs.map((job) => runJob(sql, job, workerId, { deadline: options.hardDeadline })));
