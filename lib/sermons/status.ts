@@ -15,7 +15,15 @@ export interface Stage {
   detail: string | null;
   progress: number | null;
   /** `detail` is the provider's own error text, for troubleshooting; it never contains user content. */
-  error: { code: string; message: string; detail: string | null } | null;
+  error: StageError | null;
+  /** While a failed attempt waits to be retried: why that attempt failed. */
+  lastAttempt: Omit<StageError, "message"> | null;
+}
+
+export interface StageError {
+  code: string;
+  message: string;
+  detail: string | null;
 }
 
 export interface ProcessingStatus {
@@ -37,6 +45,8 @@ interface JobLite {
   last_error: string | null;
   error_code: string | null;
   result?: unknown;
+  attempt_count?: number;
+  max_attempts?: number;
   source_id: string | null;
   updated_at: string;
   created_at: string;
@@ -55,10 +65,15 @@ const FINAL_MESSAGES: Record<string, string> = {
   lease_expired: "Processing stopped before it finished. Try again.",
 };
 
-function errorDetail(result: unknown): string | null {
-  if (!result || typeof result !== "object") return null;
-  const detail = (result as { error_detail?: unknown }).error_detail;
+/** Provider error text helps the owner troubleshoot; internal errors stay in server logs. */
+function errorDetail(job: JobLite): string | null {
+  if (job.error_code === "internal" || !job.result || typeof job.result !== "object") return null;
+  const detail = (job.result as { error_detail?: unknown }).error_detail;
   return typeof detail === "string" && detail.trim() ? detail : null;
+}
+
+function retryNote(job: JobLite): string {
+  return job.attempt_count && job.max_attempts ? `Retrying soon (try ${job.attempt_count + 1} of ${job.max_attempts})` : "Retrying soon";
 }
 
 const STAGE_DEFS: { key: StageKey; label: string; types: Enums<"job_type">[] }[] = [
@@ -102,16 +117,17 @@ export function computeStatus(input: {
       key: def.key,
       label: def.label,
       state,
-      detail: running?.stage ?? (queued ? (queued.last_error ? "Retrying soon" : "Waiting to start") : countNote),
+      detail: running?.stage ?? (queued ? (queued.last_error ? retryNote(queued) : "Waiting to start") : countNote),
       progress: running ? running.progress : null,
       error: firstFailure
         ? {
             code: firstFailure.error_code ?? "failed",
             message: FINAL_MESSAGES[firstFailure.error_code ?? ""] ?? firstFailure.last_error ?? "This step failed.",
-            // Provider error text helps the owner troubleshoot; internal errors stay in server logs.
-            detail: firstFailure.error_code === "internal" ? null : errorDetail(firstFailure.result),
+            detail: errorDetail(firstFailure),
           }
         : null,
+      lastAttempt:
+        !running && queued?.last_error ? { code: queued.error_code ?? "failed", detail: errorDetail(queued) } : null,
     });
   }
 
@@ -145,7 +161,7 @@ export async function getProcessingStatus(supabase: AppSupabaseClient, sermonId:
     supabase.from("sermons").select("status, pack_stale, current_pack_id, ai_artifacts!sermons_current_pack_fk(version)").eq("id", sermonId).maybeSingle(),
     supabase
       .from("jobs")
-      .select("id, type, status, stage, progress, last_error, error_code, result, source_id, updated_at, created_at")
+      .select("id, type, status, stage, progress, last_error, error_code, result, attempt_count, max_attempts, source_id, updated_at, created_at")
       .eq("sermon_id", sermonId)
       .order("created_at", { ascending: false })
       .limit(200),

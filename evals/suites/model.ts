@@ -2,7 +2,8 @@ import { estimateCostUsd, addUsage, ZERO_USAGE } from "@/lib/ai/pricing";
 import { FixtureProvider } from "@/lib/ai/providers/fixture";
 import { GeminiProvider } from "@/lib/ai/providers/gemini";
 import { answerQuestionPrompt, classifyQuestionPrompt, type QuestionClassification } from "@/lib/ai/prompts/qa";
-import { sermonPackPrompt, type SermonPackDraft } from "@/lib/ai/prompts/sermon-pack";
+import { SERMON_PACK_PROMPT_VERSION, type SermonPackDraft } from "@/lib/ai/prompts/sermon-pack";
+import { runSermonPack } from "@/lib/ai/tasks/sermon-pack";
 import { runPrompt } from "@/lib/ai/structured";
 import type { ModelProvider, TokenUsage } from "@/lib/ai/types";
 import { findScripture, normalizeReference } from "@/lib/bible/reference";
@@ -77,7 +78,7 @@ export async function runModelSuite(provider: ModelProvider): Promise<SuiteResul
   let packLatency = 0;
   let packModel = "";
   try {
-    const run = await runPrompt(provider, sermonPackPrompt, {
+    const run = await runSermonPack(provider, {
       sermon: NOTEBOOK_SERMON,
       hasRecording: true,
       recordingNote: null,
@@ -199,7 +200,7 @@ export async function runModelSuite(provider: ModelProvider): Promise<SuiteResul
     info: {
       provider: provider.id,
       synthesis_model: packModel || provider.modelFor("synthesis"),
-      prompt_versions: `${sermonPackPrompt.id}@${sermonPackPrompt.version}, ${answerQuestionPrompt.id}@${answerQuestionPrompt.version}`,
+      prompt_versions: `sermon-pack@${SERMON_PACK_PROMPT_VERSION}, ${answerQuestionPrompt.id}@${answerQuestionPrompt.version}`,
       tokens_in: usage.inputTokens,
       tokens_out: usage.outputTokens + usage.thinkingTokens,
       est_cost_usd: costKnown ? Number(cost.toFixed(4)) : null,

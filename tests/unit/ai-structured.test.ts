@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { AIError } from "@/lib/ai/errors";
 import { answerSchema } from "@/lib/ai/prompts/qa";
 import { mediaAnalysisSchema } from "@/lib/ai/prompts/sermon-analysis";
-import { sermonPackPrompt, sermonPackSchema } from "@/lib/ai/prompts/sermon-pack";
+import { sermonPackPrompts, sermonPackSchema } from "@/lib/ai/prompts/sermon-pack";
+import { runSermonPack } from "@/lib/ai/tasks/sermon-pack";
 import { PROMPT_REGISTRY } from "@/lib/ai/service";
 import { toProviderSchema } from "@/lib/ai/schema";
 import { extractJson, runPrompt } from "@/lib/ai/structured";
@@ -128,11 +129,68 @@ describe("fixture provider", () => {
       ],
       detectedScripture: [{ reference: "Romans 8:24–25", kind: "explicit", keys: ["V2"] }],
     };
-    const run = await runPrompt(provider, sermonPackPrompt, input);
+    const run = await runSermonPack(provider, input);
     const parsed = sermonPackSchema.parse(run.output);
     const keys = new Set(input.units.map((u) => u.key));
     const cited = JSON.stringify(parsed).match(/"source_keys":\[[^\]]*\]/g)!.flatMap((m) => JSON.parse(m.slice(14)) as string[]);
     for (const k of cited) expect(keys.has(k)).toBe(true);
+  });
+});
+
+describe("runSermonPack", () => {
+  const input = {
+    sermon: { title: null, speaker: null, church: null, series: null, date: null, userSetFields: [] },
+    hasRecording: false,
+    recordingNote: null,
+    units: [{ key: "N1", kind: "note" as const, label: "Your note", text: "God is working while I wait" }],
+    detectedScripture: [],
+  };
+
+  it("splits the pack into two requests that together cover the whole schema", () => {
+    const core = Object.keys(sermonPackPrompts.core.schema.shape);
+    const details = Object.keys(sermonPackPrompts.details.schema.shape);
+    expect(core.filter((f) => details.includes(f))).toEqual([]);
+    expect([...core, ...details].sort()).toEqual(Object.keys(sermonPackSchema.shape).sort());
+    expect(sermonPackPrompts.core.build(input).system).toContain("writes only these parts of the pack: metadata_suggestions");
+  });
+
+  it("runs both parts at the same time and merges them", async () => {
+    const core = await new FixtureProvider().generate({
+      tier: "synthesis", system: "", parts: [], responseJsonSchema: {}, trace: { promptId: "sermon-pack:core", promptVersion: "x", input },
+    });
+    const details = await new FixtureProvider().generate({
+      tier: "synthesis", system: "", parts: [], responseJsonSchema: {}, trace: { promptId: "sermon-pack:details", promptVersion: "x", input },
+    });
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const provider = new ScriptedProvider([]);
+    provider.generate = async (req) => {
+      provider.calls.push(req);
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 10));
+      inFlight--;
+      const text = req.trace.promptId === "sermon-pack:core" ? core.text : details.text;
+      return { text, model: "scripted-model", latencyMs: 5, usage: { inputTokens: 10, outputTokens: 5, thinkingTokens: 0, totalTokens: 15 } };
+    };
+    const run = await runSermonPack(provider, input);
+    expect(maxInFlight).toBe(2);
+    expect(run.usage.totalTokens).toBe(30);
+    expect(run.output.big_idea.text.length).toBeGreaterThan(0);
+    expect(Array.isArray(run.output.quotes)).toBe(true);
+    expect(provider.calls.map((c) => c.trace.promptId).sort()).toEqual(["sermon-pack:core", "sermon-pack:details"]);
+  });
+
+  it("cancels the other part when one fails", async () => {
+    let otherSignal: AbortSignal | undefined;
+    const provider = new ScriptedProvider([]);
+    provider.generate = async (req) => {
+      if (req.trace.promptId === "sermon-pack:core") throw new AIError("unavailable", { detail: "503" });
+      otherSignal = req.signal;
+      return new Promise((_, reject) => req.signal!.addEventListener("abort", () => reject(new Error("aborted"))));
+    };
+    await expect(runSermonPack(provider, input)).rejects.toMatchObject({ code: "unavailable" });
+    expect(otherSignal?.aborted).toBe(true);
   });
 });
 

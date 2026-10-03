@@ -133,16 +133,13 @@ export function ProcessingStages({ sermonId, className }: { sermonId: string; cl
               {s.state === "failed" && s.error ? (
                 <>
                   <p className="text-sm text-ink-muted">{s.error.message}</p>
-                  <details className="mt-1 text-xs text-ink-muted">
-                    <summary className="cursor-pointer font-semibold hover:text-ink">Technical details</summary>
-                    <p className="mt-1 break-words font-mono">
-                      {s.error.code}
-                      {s.error.detail ? ` — ${s.error.detail}` : ""}
-                    </p>
-                  </details>
+                  <TechnicalDetails code={s.error.code} detail={s.error.detail} />
                 </>
               ) : s.detail ? (
-                <p className="text-sm text-ink-muted">{s.detail}</p>
+                <>
+                  <p className="text-sm text-ink-muted">{s.detail}</p>
+                  {s.lastAttempt ? <TechnicalDetails code={s.lastAttempt.code} detail={s.lastAttempt.detail} label="Why the last try stopped" /> : null}
+                </>
               ) : null}
               {s.state === "failed" && s.key === "pack" ? (
                 <Button size="sm" variant="secondary" className="mt-2" loading={retrying} onClick={retryPack} icon={<RotateCw className="size-4" aria-hidden="true" />}>
@@ -154,5 +151,17 @@ export function ProcessingStages({ sermonId, className }: { sermonId: string; cl
         ))}
       </ol>
     </section>
+  );
+}
+
+function TechnicalDetails({ code, detail, label = "Technical details" }: { code: string; detail: string | null; label?: string }) {
+  return (
+    <details className="mt-1 text-xs text-ink-muted">
+      <summary className="cursor-pointer font-semibold hover:text-ink">{label}</summary>
+      <p className="mt-1 break-words font-mono">
+        {code}
+        {detail ? ` — ${detail}` : ""}
+      </p>
+    </details>
   );
 }

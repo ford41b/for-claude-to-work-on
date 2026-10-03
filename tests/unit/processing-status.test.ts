@@ -33,7 +33,14 @@ describe("processing status for a step that failed for good", () => {
     expect(pack.error?.detail).toBeNull();
   });
 
-  it("still says it is retrying while retries remain", () => {
-    expect(status(job({ status: "queued" })).detail).toBe("Retrying soon");
+  it("while retries remain, says so and shows why the last try stopped", () => {
+    const pack = status(job({ status: "queued", attempt_count: 1, max_attempts: 3 }));
+    expect(pack.detail).toBe("Retrying soon (try 2 of 3)");
+    expect(pack.error).toBeNull();
+    expect(pack.lastAttempt).toEqual({ code: "unavailable", detail: expect.stringContaining("500 An internal error") });
+  });
+
+  it("shows no last-try details for a step that hasn't failed yet", () => {
+    expect(status(job({ status: "queued", last_error: null, error_code: null, result: null })).lastAttempt).toBeNull();
   });
 });

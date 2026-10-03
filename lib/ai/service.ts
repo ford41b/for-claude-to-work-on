@@ -1,10 +1,11 @@
 import { getModelProvider } from "@/lib/ai/registry";
 import { runPrompt } from "@/lib/ai/structured";
+import { runSermonPack } from "@/lib/ai/tasks/sermon-pack";
 import { documentAnalysisPrompt, type DocumentAnalysisInput } from "@/lib/ai/prompts/document-analysis";
 import { imageAnalysisPrompt, type PhotoAnalysisInput } from "@/lib/ai/prompts/image-analysis";
 import { answerQuestionPrompt, classifyQuestionPrompt, type AnswerInput } from "@/lib/ai/prompts/qa";
 import { sermonAnalysisPrompt, type MediaAnalysisInput } from "@/lib/ai/prompts/sermon-analysis";
-import { sermonPackPrompt, type SermonPackInput } from "@/lib/ai/prompts/sermon-pack";
+import { sermonPackPrompts, type SermonPackInput } from "@/lib/ai/prompts/sermon-pack";
 import { studyPrompt, type StudyInput } from "@/lib/ai/prompts/study";
 import type { MediaToPrepare, PreparedMedia } from "@/lib/ai/types";
 
@@ -32,7 +33,7 @@ export const sermonAI = {
     });
   },
   buildSermonPack(input: SermonPackInput, signal?: AbortSignal) {
-    return runPrompt(getModelProvider(), sermonPackPrompt, input, { signal });
+    return runSermonPack(getModelProvider(), input, { signal });
   },
   classifyQuestion(question: string, signal?: AbortSignal) {
     return runPrompt(getModelProvider(), classifyQuestionPrompt, { question }, { signal });
@@ -63,7 +64,8 @@ export const PROMPT_REGISTRY = [
   sermonAnalysisPrompt,
   imageAnalysisPrompt,
   documentAnalysisPrompt,
-  sermonPackPrompt,
+  sermonPackPrompts.core,
+  sermonPackPrompts.details,
   classifyQuestionPrompt,
   answerQuestionPrompt,
   studyPrompt,

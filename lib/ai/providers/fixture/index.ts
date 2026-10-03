@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { AIError } from "@/lib/ai/errors";
 import type { AnswerInput } from "@/lib/ai/prompts/qa";
 import type { MediaAnalysis, MediaAnalysisInput } from "@/lib/ai/prompts/sermon-analysis";
-import type { SermonPackDraft, SermonPackInput } from "@/lib/ai/prompts/sermon-pack";
+import { sermonPackPrompts, type SermonPackDraft, type SermonPackInput } from "@/lib/ai/prompts/sermon-pack";
 import { STUDY_FORMAT_SPECS, type StudyInput } from "@/lib/ai/prompts/study";
 import {
   EMBEDDING_DIMENSIONS,
@@ -97,6 +97,11 @@ function capitalize(text: string): string {
 function firstSentence(text: string, max = 140): string {
   const s = text.split(/(?<=[.!?])\s/)[0] ?? text;
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+/** The fields one part prompt of the pack asks for. */
+function pickFields(pack: SermonPackDraft, prompt: { schema: { shape: object } }) {
+  return Object.fromEntries(Object.keys(prompt.schema.shape).map((k) => [k, pack[k as keyof SermonPackDraft]]));
 }
 
 function buildPack(input: SermonPackInput): SermonPackDraft {
@@ -290,8 +295,9 @@ export class FixtureProvider implements ModelProvider {
           note: "Synthetic test extraction.",
         };
         break;
-      case "sermon-pack":
-        output = buildPack(input as SermonPackInput);
+      case "sermon-pack:core":
+      case "sermon-pack:details":
+        output = pickFields(buildPack(input as SermonPackInput), promptId === "sermon-pack:core" ? sermonPackPrompts.core : sermonPackPrompts.details);
         break;
       case "qa-classify":
         output = classify((input as { question: string }).question);

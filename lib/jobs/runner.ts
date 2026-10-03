@@ -125,6 +125,11 @@ export async function runJob(
     return "succeeded";
   } catch (err) {
     const failure = classifyFailure(controller.signal.aborted && !isAIError(err) ? new AIError("timeout") : err);
+    if (controller.signal.aborted) {
+      // Say which limit stopped it, so a step that never fits can be told apart from a slow provider.
+      const limit = options.deadline && timeoutMs < limitMs ? "the server function's remaining run time" : "this step's time limit";
+      failure.detail = `${failure.detail ? `${failure.detail} ` : ""}(stopped after ${Math.round((Date.now() - started) / 1000)} s by ${limit})`;
+    }
     const status = await failJob(sql, job, workerId, failure);
     log.warn("job.failed", {
       job_id: job.id,

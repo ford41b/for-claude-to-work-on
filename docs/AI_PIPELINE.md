@@ -69,7 +69,7 @@ the system instruction and content parts. `PROMPT_REGISTRY` in `lib/ai/service.t
 | `sermon-analysis` | 2026-09-28.1 | media | YouTube URL or uploaded audio/video, known metadata | Timestamped segments (kind, summary, phrases heard word-for-word, Scripture mentioned, on-screen text, timing confidence), sermon start/end, quotes with a `heard_verbatim` flag, illustrations, metadata guesses with a basis |
 | `image-analysis` | 2026-09-28.1 | media | Photo (high media resolution) | Photo kind, title, typed text blocks with per-block confidence and `[unclear]` markers, handwriting flag |
 | `document-analysis` | 2026-09-28.1 | media | PDF | Per-page text |
-| `sermon-pack` | 2026-09-28.1 | synthesis | Source catalog units (keys `V#`, `N#`, `P#`, `D#.p#`, `C#`) and the deterministic Scripture detections | The Sermon Pack draft. Every item carries `source_keys`. |
+| `sermon-pack:core`, `sermon-pack:details` | 2026-10-03.1 | synthesis | Source catalog units (keys `V#`, `N#`, `P#`, `D#.p#`, `C#`) and the deterministic Scripture detections | The Sermon Pack draft, in two parts run at the same time: *core* (metadata, big idea, summaries, main ideas, outline, moments, Scripture; medium thinking) and *details* (quotes, illustrations, applications, questions, terms, review items; low thinking). `lib/ai/tasks/sermon-pack.ts` merges them and validates the whole pack; if one part fails, the other is cancelled. One request for everything could outlast a 300 s serverless function. Every item carries `source_keys`. |
 | `qa-classify` | 2026-09-28.1 | fast | A question | Question type, search query, whether a time is wanted |
 | `qa-answer` | 2026-09-28.1 | synthesis | Retrieved evidence units (`K#`), overview, history | Markdown answer with `[K#]` markers, `cited_keys`, confidence, `supported_by_sermon`, separate `general_background` |
 | `bible-study` | 2026-09-28.1 | synthesis | Pack summary, Scripture, cited units, format | A study in one of 8 formats; each section carries `source_keys` |
@@ -113,8 +113,11 @@ Before a request fails, the Gemini adapter retries a refused form of it (400 INV
 or a 500 INTERNAL, which Gemini returns for some large-schema requests) without the optional
 tuning, then with the schema moved into the prompt. 503/504 and network errors are not
 reshaped; they back off and retry. Network errors are classified from their `cause` chain, so a
-stalled connection is a `timeout` rather than a generic outage. Once retries run out, the step
-says so plainly ("didn't respond after several tries") instead of promising another retry.
+stalled connection is a `timeout` rather than a generic outage. A job stopped by a time limit
+records which one ("this step's time limit" or "the server function's remaining run time") and
+how long it ran. While a step waits to retry, the processing card says which try is next and
+shows "Why the last try stopped". Once retries run out, the step says so plainly ("didn't
+respond after several tries") instead of promising another retry.
 
 | Code | Retry | Typical cause | What the user sees |
 |---|---|---|---|
@@ -131,7 +134,7 @@ says so plainly ("didn't respond after several tries") instead of promising anot
 | `PROCESS_PHOTO` | `process-photo.ts` | Builds the EXIF-stripped WebP preview, runs `image-analysis`, and stores a new AI transcription version. If the user has already corrected the transcription, the new AI version is kept but does not become current. |
 | `PROCESS_DOCUMENT` | `process-document.ts` | Extracts plain text and Markdown directly; PDFs go through `document-analysis`. Stores the pages. |
 | `EXTRACT_SCRIPTURE` | `extract-scripture.ts` | Runs deterministic Scripture detection over every unit (no AI), so references appear early and survive with AI off, then queues the pack build |
-| `BUILD_SERMON_PACK` | `build-pack.ts` | Builds the catalog. Skips if unchanged. Otherwise runs `sermon-pack`, resolves it (`resolvePack`), and persists a new pack version in one transaction that preserves user edits (`lib/pack/persist.ts`), then queues embeddings |
+| `BUILD_SERMON_PACK` | `build-pack.ts` | Builds the catalog. Skips if unchanged. Otherwise runs the two `sermon-pack` parts, resolves the merged draft (`resolvePack`), and persists a new pack version in one transaction that preserves user edits (`lib/pack/persist.ts`), then queues embeddings |
 | `CREATE_EMBEDDINGS` | `create-embeddings.ts` | Chunks the catalog, reuses stored vectors for unchanged chunks (same content hash and embedding model), embeds only the rest, and replaces the sermon's chunk set in one transaction |
 | `GENERATE_STUDY` | `generate-study.ts` | Runs `bible-study` over the pack and cited units, then resolves section citations the same way as the pack |
 

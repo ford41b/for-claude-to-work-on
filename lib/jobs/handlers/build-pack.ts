@@ -1,5 +1,5 @@
 import { estimateCostUsd } from "@/lib/ai/pricing";
-import { sermonPackPrompt } from "@/lib/ai/prompts/sermon-pack";
+import { SERMON_PACK_PROMPT_VERSION } from "@/lib/ai/prompts/sermon-pack";
 import { sermonAI } from "@/lib/ai/service";
 import { combineHashes } from "@/lib/hash";
 import { persistPack } from "@/lib/pack/persist";
@@ -28,7 +28,7 @@ export const buildSermonPack: JobHandler = async ({ job, sql, signal, progress }
     );
   }
 
-  const versionHash = combineHashes([catalog.sourceVersionHash, sermonPackPrompt.version]);
+  const versionHash = combineHashes([catalog.sourceVersionHash, SERMON_PACK_PROMPT_VERSION]);
   if (!job.payload.force && catalog.sermon.current_pack_id) {
     const [current] = await sql<{ source_version_hash: string | null }[]>`
       select source_version_hash from public.ai_artifacts where id = ${catalog.sermon.current_pack_id}`;
@@ -104,7 +104,7 @@ export const buildSermonPack: JobHandler = async ({ job, sql, signal, progress }
 
   // Edits that landed during synthesis → one more (debounced) rebuild.
   const after = await buildCatalog(sql, job.sermon_id);
-  if (after && combineHashes([after.sourceVersionHash, sermonPackPrompt.version]) !== versionHash) {
+  if (after && combineHashes([after.sourceVersionHash, SERMON_PACK_PROMPT_VERSION]) !== versionHash) {
     await sql`update public.sermons set pack_stale = true where id = ${job.sermon_id}`;
     await enqueueJob(sql, {
       userId: job.user_id,

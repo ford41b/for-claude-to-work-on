@@ -165,35 +165,78 @@ function renderUnit(u: CatalogUnit): string {
   return bullet([`[${u.key}] ${u.label}`, u.text.trim(), ...(u.details ?? [])]);
 }
 
-export const sermonPackPrompt: PromptDefinition<SermonPackInput, typeof sermonPackSchema> = {
-  id: "sermon-pack",
-  version: "2026-09-28.1",
-  tier: "synthesis",
-  description: "Canonical Sermon Pack synthesis over all evidence units with source keys.",
-  modelRequirements: "Strong long-context reasoning and faithful citation; JSON schema output.",
-  schema: sermonPackSchema,
-  options: { temperature: 0.3, maxOutputTokens: 24_000, thinking: "medium", timeoutMs: 5 * 60_000 },
-  build(input) {
-    const s = input.sermon;
-    const header = bullet([
-      "Sermon details the listener has on file (user-set fields are authoritative):",
-      `- Title: ${s.title || "(none)"}${s.userSetFields.includes("title") ? " [set by listener]" : ""}`,
-      `- Speaker: ${s.speaker || "(unknown)"}${s.userSetFields.includes("speaker") ? " [set by listener]" : ""}`,
-      `- Church: ${s.church || "(unknown)"}`,
-      `- Series: ${s.series || "(none)"}`,
-      `- Date: ${s.date || "(unknown)"}`,
-      input.hasRecording ? "- A recording was analyzed (V keys below)." : "- No recording is available; use notes, photos, and documents only.",
-      input.recordingNote ? `- Note from the recording analysis: ${input.recordingNote}` : null,
-    ]);
-    const scripture = input.detectedScripture.length
-      ? `Scripture detected in the sources:\n${input.detectedScripture
-          .map((d) => `- ${d.reference} (${d.kind}; in ${d.keys.join(", ") || "sources"})`)
-          .join("\n")}`
-      : "No Scripture references were detected automatically.";
-    const units = input.units.map(renderUnit).join("\n\n");
-    return {
-      system: SYSTEM,
-      parts: [{ type: "text", text: `${header}\n\n${scripture}\n\nEvidence units:\n\n${units}\n\nBuild the Sermon Pack.` }],
-    };
-  },
+/**
+ * The pack is written by two requests that run at the same time, each producing part of the
+ * schema. One request for everything can take longer than a serverless function may run
+ * (Vercel stops it at 300 s); two halves finish in a little over half the time. The parts are
+ * merged and validated against the full schema (lib/ai/tasks/sermon-pack.ts).
+ */
+export const SERMON_PACK_PROMPT_VERSION = "2026-10-03.1";
+
+const packCoreSchema = sermonPackSchema.pick({
+  metadata_suggestions: true,
+  big_idea: true,
+  central_thesis: true,
+  short_summary: true,
+  detailed_summary: true,
+  main_ideas: true,
+  outline: true,
+  moments: true,
+  scriptures: true,
+});
+const packDetailsSchema = sermonPackSchema.pick({
+  quotes: true,
+  illustrations: true,
+  applications: true,
+  questions_to_consider: true,
+  terms: true,
+  review_items: true,
+});
+
+function packPartPrompt<TSchema extends typeof packCoreSchema | typeof packDetailsSchema>(
+  part: "core" | "details",
+  schema: TSchema,
+  options: PromptDefinition<SermonPackInput, TSchema>["options"],
+): PromptDefinition<SermonPackInput, TSchema> {
+  const fields = Object.keys(schema.shape);
+  const others = Object.keys(sermonPackSchema.shape).filter((f) => !fields.includes(f));
+  return {
+    id: `sermon-pack:${part}`,
+    version: SERMON_PACK_PROMPT_VERSION,
+    tier: "synthesis",
+    description: `Sermon Pack synthesis (${part} fields) over all evidence units with source keys.`,
+    modelRequirements: "Strong long-context reasoning and faithful citation; JSON schema output.",
+    schema,
+    options,
+    build: (input) => buildPackRequest(input, fields, others),
+  };
+}
+
+export const sermonPackPrompts = {
+  core: packPartPrompt("core", packCoreSchema, { temperature: 0.3, maxOutputTokens: 14_000, thinking: "medium", timeoutMs: 5 * 60_000 }),
+  details: packPartPrompt("details", packDetailsSchema, { temperature: 0.3, maxOutputTokens: 12_000, thinking: "low", timeoutMs: 5 * 60_000 }),
 };
+
+function buildPackRequest(input: SermonPackInput, fields: string[], others: string[]) {
+  const s = input.sermon;
+  const header = bullet([
+    "Sermon details the listener has on file (user-set fields are authoritative):",
+    `- Title: ${s.title || "(none)"}${s.userSetFields.includes("title") ? " [set by listener]" : ""}`,
+    `- Speaker: ${s.speaker || "(unknown)"}${s.userSetFields.includes("speaker") ? " [set by listener]" : ""}`,
+    `- Church: ${s.church || "(unknown)"}`,
+    `- Series: ${s.series || "(none)"}`,
+    `- Date: ${s.date || "(unknown)"}`,
+    input.hasRecording ? "- A recording was analyzed (V keys below)." : "- No recording is available; use notes, photos, and documents only.",
+    input.recordingNote ? `- Note from the recording analysis: ${input.recordingNote}` : null,
+  ]);
+  const scripture = input.detectedScripture.length
+    ? `Scripture detected in the sources:\n${input.detectedScripture
+        .map((d) => `- ${d.reference} (${d.kind}; in ${d.keys.join(", ") || "sources"})`)
+        .join("\n")}`
+    : "No Scripture references were detected automatically.";
+  const units = input.units.map(renderUnit).join("\n\n");
+  return {
+    system: `${SYSTEM}\n\nThis request writes only these parts of the pack: ${fields.join(", ")}. A separate request writes the rest (${others.join(", ")}), so leave those out.`,
+    parts: [{ type: "text" as const, text: `${header}\n\n${scripture}\n\nEvidence units:\n\n${units}\n\nWrite these parts of the Sermon Pack: ${fields.join(", ")}.` }],
+  };
+}
