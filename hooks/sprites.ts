@@ -21,7 +21,7 @@ const PALETTE = {
   paper: '#ECE6D9',
   line: '#A49D91',
   mark: '#8C8C96',
-  spark: '#EFC55C',
+  spark: '#C98A16',
   lens: '#B9D6DE',
 }
 type Color = keyof typeof PALETTE
@@ -112,7 +112,7 @@ type Eyes =
   | 'wide'
   | 'puzzled'
   | 'happy'
-type Arm = 'out' | 'down' | 'chin' | 'scratch' | 'raise' | 'wave' | 'hover' | 'tap' | 'hold' | 'cheer'
+type Arm = 'out' | 'down' | 'chin' | 'scratch' | 'raise' | 'wave' | 'hover' | 'tap' | 'hold' | 'cheer' | 'stub' | 'stubUp'
 type Legs = 'stand' | 'tap' | 'tuck'
 
 type Pose = {
@@ -150,8 +150,8 @@ function creature(g: Grid, p: Pose = {}) {
   g.rect(x + lean, top - rise, 16, 6 + rise, 'body')
   g.rect(x, top + 6, 16, bottom - top - 5, 'body')
 
-  arm(g, x + lean, top, -1, p.l ?? 'out')
-  arm(g, x + lean, top, 1, p.r ?? 'out')
+  arm(g, x + Math.max(0, lean), top, -1, p.l ?? 'out')
+  arm(g, x + Math.min(0, lean), top, 1, p.r ?? 'out')
   eyes(g, x + lean, top - rise, p.eyes ?? 'front')
 }
 
@@ -173,7 +173,8 @@ function arm(g: Grid, x: number, top: number, side: number, pose: Arm) {
       return at(2, -1, 2, 3)
     case 'wave':
       at(0, 2, 4, 4)
-      return at(3, -1, 2, 3)
+      at(3, 0, 2, 2)
+      return at(4, -2, 2, 2)
     case 'cheer':
       at(0, 1, 4, 4)
       return at(2, -3, 2, 4)
@@ -183,6 +184,10 @@ function arm(g: Grid, x: number, top: number, side: number, pose: Arm) {
       return at(0, 4, 5, 4)
     case 'hold':
       return at(0, 4, 5, 4)
+    case 'stub':
+      return at(0, 5, 2, 3)
+    case 'stubUp':
+      return at(0, 3, 2, 3)
   }
 }
 
@@ -272,7 +277,7 @@ function code(g: Grid, typed: number, cursorOn: boolean) {
     const x0 = MON_X + 2 + indent
     if (shown > 0) g.rect(x0, y, Math.min(shown, accent || shown), 1, accent ? 'code2' : 'code')
     if (accent && shown > accent) g.rect(x0 + accent + 1, y, shown - accent - 1, 1, 'code')
-    if (n === line && cursorOn) g.rect(x0 + shown + 1, y, 1, 1, 'code2')
+    if (n === line && cursorOn && x0 + shown + 1 <= MON_X + 12) g.rect(x0 + shown + 1, y, 1, 1, 'code2')
   })
 }
 
@@ -281,8 +286,8 @@ function paper(g: Grid, reading: number, flip = false) {
   const x = 30
   const y = 10
   if (flip) {
-    g.rect(x + 3, y, 3, 11, 'line')
-    g.rect(x + 4, y + 1, 1, 9, 'paper')
+    g.rect(x + 1, y, 3, 11, 'line')
+    g.rect(x + 2, y + 1, 1, 9, 'paper')
     return
   }
   g.rect(x, y, 9, 11, 'line')
@@ -292,14 +297,14 @@ function paper(g: Grid, reading: number, flip = false) {
 
 // A magnifying glass whose handle starts at the hand tip (hx, hy).
 function magnifier(g: Grid, hx: number, hy: number) {
-  g.rect(hx + 1, hy, 1, 1, 'metal')
-  g.rect(hx + 2, hy - 1, 1, 1, 'metal')
+  g.rect(hx + 1, hy, 1, 1, 'steel')
+  g.rect(hx + 2, hy - 1, 1, 1, 'steel')
   const x = hx + 2
   const y = hy - 6
-  g.rect(x + 1, y, 3, 1, 'metal')
-  g.rect(x, y + 1, 1, 3, 'metal')
-  g.rect(x + 4, y + 1, 1, 3, 'metal')
-  g.rect(x + 1, y + 4, 3, 1, 'metal')
+  g.rect(x + 1, y, 3, 1, 'steel')
+  g.rect(x, y + 1, 1, 3, 'steel')
+  g.rect(x + 4, y + 1, 1, 3, 'steel')
+  g.rect(x + 1, y + 4, 3, 1, 'steel')
   g.rect(x + 1, y + 1, 3, 3, 'lens')
 }
 
@@ -314,7 +319,7 @@ function indicator(g: Grid, step: number) {
 const marks = {
   bang: ['#', '#', '#', '', '#'],
   question: ['.##.', '#..#', '...#', '..#.', '', '..#.'],
-  z: ['###', '.#', '###'],
+  z: ['###', '..#', '.#', '###'],
   bigZ: ['####', '..#', '.#', '####'],
 }
 
@@ -384,13 +389,16 @@ function codingLoop(): Frame[] {
       done = Math.min(len, done + step)
       typed += step === 2 && done === len && len % 2 ? 1 : step
       const t = Math.min(typed, total)
-      const isLeft = beat % 2 === 0
+      // The near hand and the far one (foreshortened, turned toward the desk)
+      // take turns on the keys; the struck key lights up.
+      const isNearUp = beat % 2 === 0
+      const key = isNearUp ? undefined : (beat >> 1) % 3
       const bob = beat % 4 === 2 ? 1 : 0 // a nod on every other hover, never on a tap
       frames.push(
         f(
           ms,
-          pose({ ...sitting, drop: 2 + bob, l: isLeft ? 'down' : 'out', r: isLeft ? 'hover' : 'tap' }, g => {
-            computer(g, { keys: isLeft ? undefined : beat % 4 })
+          pose({ ...sitting, drop: 2 + bob, l: isNearUp ? 'stub' : 'stubUp', r: isNearUp ? 'hover' : 'tap' }, g => {
+            computer(g, { keys: key })
             code(g, t, true)
           }),
         ),
@@ -402,7 +410,7 @@ function codingLoop(): Frame[] {
     frames.push(
       f(
         lookMs,
-        pose({ ...sitting, eyes: 'upRight', r: 'hover' }, g => {
+        pose({ ...sitting, eyes: 'upRight', l: 'stub', r: 'hover' }, g => {
           computer(g)
           code(g, t, false)
         }),
@@ -412,7 +420,7 @@ function codingLoop(): Frame[] {
       frames.push(
         f(
           120,
-          pose({ ...sitting, eyes: 'blink', r: 'hover' }, g => {
+          pose({ ...sitting, eyes: 'blink', l: 'stub', r: 'hover' }, g => {
             computer(g)
             code(g, t, true)
           }),
@@ -458,11 +466,11 @@ const SCENES: Record<Mood, (variant: number) => Scene> = {
     intro: [
       f(90, pose({ eyes: 'right' }, g => computer(g, { height: 0 }))),
       f(90, pose({ drop: 1, eyes: 'right' }, g => computer(g, { height: 4 }))),
-      f(110, pose({ drop: 2, eyes: 'right', r: 'hover' }, g => computer(g, { height: 10 }))),
-      f(140, pose({ drop: 2, eyes: 'upRight', r: 'hover' }, g => computer(g, { screen: 'on' }))),
+      f(110, pose({ drop: 2, eyes: 'right', l: 'stub', r: 'hover' }, g => computer(g, { height: 10 }))),
+      f(140, pose({ drop: 2, eyes: 'upRight', l: 'stub', r: 'hover' }, g => computer(g, { screen: 'on' }))),
     ],
     loop: codingLoop(),
-    still: pose({ drop: 2, eyes: 'right', r: 'tap' }, g => {
+    still: pose({ drop: 2, eyes: 'right', l: 'stubUp', r: 'tap' }, g => {
       computer(g)
       code(g, 4, true)
     }),
@@ -472,7 +480,7 @@ const SCENES: Record<Mood, (variant: number) => Scene> = {
   // Leaving the computer: plays once, then the next mood takes over.
   unpacking: () => ({
     intro: [
-      f(110, pose({ drop: 2, eyes: 'right', r: 'hover' }, g => computer(g))),
+      f(110, pose({ drop: 2, eyes: 'right', l: 'stub', r: 'hover' }, g => computer(g))),
       f(90, pose({ drop: 1, eyes: 'right' }, g => computer(g, { height: 4 }))),
       f(90, pose({ eyes: 'right' }, g => computer(g, { height: 0 }))),
       f(1, pose({})),

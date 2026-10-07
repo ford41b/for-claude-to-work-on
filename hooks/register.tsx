@@ -2,7 +2,20 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { PetMood, PetSettings, PetView } from '../types'
-import { answerPermission, classify, decide, finishEdit, FLASH_MS, tracker, verdict, type Tracker } from './machine'
+import {
+  checkCall,
+  classify,
+  decide,
+  denyCall,
+  endCall,
+  endTurn,
+  flash,
+  openDialog,
+  startCall,
+  tracker,
+  wasBackgrounded,
+  type Tracker,
+} from './machine'
 import { drawPet, MOODS, playMs, type PetDrawing } from './sprites'
 
 // Claudeagotchi: a little orange companion in the band above the prompt that
@@ -22,8 +35,8 @@ const settings = atom({ plugin: 'claudeagotchi', key: 'settings' } as const, {
 
 const ONE_SHOT = new Set<PetMood>(['success', 'waking', 'unpacking'])
 const PREVIEW_ORDER = MOODS.filter(m => m !== 'unpacking' && m !== 'waking')
+const PREVIEW_MS: Partial<Record<PetMood, number>> = { coding: 9000, resting: 9800 }
 const PREVIEW_LOOP_MS = 5200
-const PREVIEW_CODING_MS = 9000
 
 type Dollar = EngineInterface
 
@@ -32,7 +45,10 @@ const pet = {
   t: tracker(0) as Tracker,
   isEnabled: true,
   timer: undefined as Timer | undefined,
+  isPreviewing: false,
   previewTimer: undefined as Timer | undefined,
+  previewRun: 0, // bumped by every start and stop, so a stale step stands down
+  isWorkingPending: false,
   queue: Promise.resolve() as Promise<void>,
   nextId: 0,
 }
@@ -56,10 +72,12 @@ async function show($: Dollar, now: number) {
   pet.timer = undefined
   const t = pet.t
   const { mood, nextAt } = decide(t, now)
+  // Something real needs the person: a preview gives way at once.
+  if (pet.isPreviewing && (mood === 'attention' || mood === 'error')) await stopPreview($)
   if (mood !== t.shown) {
     t.shown = mood
     t.shownAt = now
-    if (!pet.previewTimer) {
+    if (!pet.isPreviewing) {
       await update($, view, v => ({
         ...v,
         mood,
@@ -72,19 +90,32 @@ async function show($: Dollar, now: number) {
 }
 
 async function stopPreview($: Dollar) {
+  pet.isPreviewing = false
+  pet.previewRun++
   pet.previewTimer?.cancel()
   pet.previewTimer = undefined
   await update($, view, v => ({ ...v, preview: null, mood: pet.t.shown, seq: v.seq + 1 }))
 }
 
 // Plays every mood in turn from local artwork alone: no model, no tools.
-async function previewStep($: Dollar, i: number) {
+async function previewStep($: Dollar, run: number, i: number) {
   const mood = PREVIEW_ORDER[i]
+  if (run !== pet.previewRun) return
   if (!mood) return stopPreview($)
   await update($, view, v => ({ ...v, preview: mood, mood, seq: v.seq + 1 }))
-  const isLoop = playMs(mood) === Infinity
-  const ms = mood === 'coding' ? PREVIEW_CODING_MS : isLoop ? PREVIEW_LOOP_MS : playMs(mood) + 1400
-  pet.previewTimer = $.clock.after(ms, () => void previewStep($, i + 1))
+  if (run !== pet.previewRun) {
+    // Stopped while this step was being drawn: put the live mood back.
+    await update($, view, v => ({ ...v, preview: null, mood: pet.t.shown, seq: v.seq + 1 }))
+    return
+  }
+  const ms = PREVIEW_MS[mood] ?? (playMs(mood) === Infinity ? PREVIEW_LOOP_MS : playMs(mood) + 1400)
+  pet.previewTimer = $.clock.after(ms, () => void previewStep($, run, i + 1))
+}
+
+async function startPreview($: Dollar) {
+  pet.isPreviewing = true
+  pet.previewRun++
+  await previewStep($, pet.previewRun, 0)
 }
 
 async function setEnabled($: Dollar, isEnabled: boolean) {
@@ -102,7 +133,7 @@ async function setEnabled($: Dollar, isEnabled: boolean) {
     // Hidden: no timer stays running; the hooks only keep their counts.
     pet.timer?.cancel()
     pet.timer = undefined
-    if (pet.previewTimer) await stopPreview($)
+    if (pet.isPreviewing) await stopPreview($)
   }
 }
 
@@ -159,11 +190,11 @@ export const register: Register = on => {
         await setReducedMotion($, !s.isReducedMotion)
         return { text: s.isReducedMotion ? 'Claudeagotchi animates again.' : 'Claudeagotchi holds still poses now.' }
       case 'preview':
-        if (pet.previewTimer) {
+        if (pet.isPreviewing) {
           await stopPreview($)
           return { text: 'Preview stopped.' }
         }
-        await previewStep($, 0)
+        await startPreview($)
         return { text: 'Previewing every Claudeagotchi state, about a minute. /pet preview again stops it.' }
       case 'status':
         return {
@@ -192,73 +223,79 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const agentId = e.agentId
     const reason = e.reason
-    void act($, (t, now) => {
-      t.lastActive = now
-      if (agentId) {
-        t.agents.delete(agentId)
-        return
-      }
-      t.isTurn = false
-      t.permissions = []
-      t.elicitations = 0
-      for (const [id, call] of t.calls) if (!call.agentId) t.calls.delete(id)
-      // An API failure or a refusal is a confirmed failure; an interrupt is not,
-      // and a turn that simply ended says nothing about success.
-      if (reason === 'error' || reason === 'refusal') t.flash = { mood: 'error', until: now + FLASH_MS.error }
-    })
+    void act($, (t, now) => endTurn(t, agentId, reason, now))
     return next(e)
   })
 
-  // Never awaits its own bookkeeping before the tool runs, and returns the
+  // Never waits on its own bookkeeping before the tool runs, and returns the
   // tool's answer exactly as the chain gave it.
   on('tool.call', async ($, e, next) => {
     const id = e.tool_use_id ?? `own-${pet.nextId++}`
     const tool = String(e.tool)
     const agentId = e.agentId
-    const { activity, verifies } = classify(tool, e as unknown as Record<string, unknown>)
-    void act($, (t, now) => {
-      t.lastActive = now
-      if (agentId) t.agents.add(agentId)
-      t.calls.set(id, { activity, agentId })
-      answerPermission(t, tool)
-    })
-    const result = await next(e)
-    const outcome = verifies
-      ? verdict({ isDenied: 'deny' in result && !!result.deny, isError: result.isError === true, text: result.text })
-      : undefined
-    void act($, (t, now) => {
-      t.lastActive = now
-      t.calls.delete(id)
-      answerPermission(t, tool)
-      if (activity === 'edit') finishEdit(t, now, t.shown === 'coding')
-      if (outcome) t.flash = { mood: outcome, until: now + FLASH_MS[outcome] }
-    })
-    return result
+    const { activity } = classify(tool, e as unknown as Record<string, unknown>)
+    void act($, (t, now) => startCall(t, id, tool, activity, agentId, now))
+    let launched: string | undefined
+    try {
+      const result = await next(e)
+      // An agent sent to the background keeps working after its call returns.
+      const record = (result.result ?? {}) as { status?: unknown; agentId?: unknown }
+      if (record.status === 'async_launched' && typeof record.agentId === 'string') launched = record.agentId
+      return result
+    } finally {
+      void act($, (t, now) => {
+        endCall(t, id, now)
+        if (launched) t.agents.add(launched)
+      })
+    }
   }).catch(($, e, next) => next(e))
+
+  // The permission check runs inside the call, before any dialog: an allowed
+  // call shows at once, one that asks waits for its dialog to claim it.
+  on('tool.check', async ($, e, next) => {
+    const result = await next(e)
+    const id = e.tool_use_id
+    const decision = result.decision
+    if (id) void act($, t => checkCall(t, id, decision))
+    return result
+  })
 
   // A permission dialog is about to be shown, unless a settings hook decided.
   on('classic.PermissionRequest', async ($, e, next) => {
     const result = await next(e)
     const tool = e.tool_name
-    if (!result.decision) {
-      void act($, t => {
-        t.permissions.push(tool)
-      })
-    }
+    const agentId = e.agent_id
+    if (!result.decision) void act($, t => openDialog(t, tool, agentId))
     return result
   })
 
   on('classic.PermissionDenied', async ($, e, next) => {
-    const tool = e.tool_name
-    void act($, t => answerPermission(t, tool))
+    const id = e.tool_use_id
+    void act($, t => denyCall(t, id))
+    return next(e)
+  })
+
+  // Success and failure are judged only for commands that actually ran: a
+  // refused or blocked call raises neither of these.
+  on('classic.PostToolUse', async ($, e, next) => {
+    const { verifies } = classify(e.tool_name, (e.tool_input ?? {}) as Record<string, unknown>)
+    if (verifies && !wasBackgrounded(e.tool_response)) void act($, (t, now) => flash(t, 'success', now))
+    return next(e)
+  })
+
+  on('classic.PostToolUseFailure', async ($, e, next) => {
+    const { verifies } = classify(e.tool_name, (e.tool_input ?? {}) as Record<string, unknown>)
+    if (verifies && !e.is_interrupt) void act($, (t, now) => flash(t, 'error', now))
     return next(e)
   })
 
   on('classic.Elicitation', async ($, e, next) => {
     const result = await next(e)
-    void act($, t => {
-      t.elicitations++
-    })
+    if (!result.block && !result.preventContinuation) {
+      void act($, t => {
+        t.elicitations++
+      })
+    }
     return result
   })
 
@@ -269,14 +306,23 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+  // Only the desktop draws vector art in this band; the terminal keeps it.
+  on('ui.render', { component: 'AbovePrompt', surface: 'desktop' }, async ($, e, next) => {
     const below = await next(e)
     const { isEnabled, isReducedMotion } = await read($, settings)
     const v = await read($, view)
     if ((!isEnabled && !v.preview) || e.props.hasSurvey) return below
-    const table = $.ui.resolve(e)
-    if (!('Svg' in table)) return below // the terminal has no vector drawing
-    const { Box, Svg, Text } = table
+    // After a reload mid-turn the counts start empty; the band knows better.
+    if (e.props.isWorking && !pet.t.isTurn && !pet.isWorkingPending) {
+      pet.isWorkingPending = true
+      $.clock.after(1, () => {
+        pet.isWorkingPending = false
+        void act($, t => {
+          t.isTurn = true
+        })
+      })
+    }
+    const { Box, Svg, Text } = $.ui.resolve(e)
     const d = drawingOf(v.mood, v.variant, isReducedMotion, v.seq)
     return (
       <Box flexDirection="column">

@@ -11,14 +11,14 @@ He is a native Claude Code mod: a plugin of function hooks. He only watches. Eve
 | | State | When |
 | --- | --- | --- |
 | ![](docs/previews/idle.gif) | **Idle** | Nothing is running. He blinks, glances around and bobs, on irregular timing. |
-| ![](docs/previews/thinking.gif) | **Thinking** | A prompt is being worked on but no tool is running (the model is generating), or a subagent is still at work. |
+| ![](docs/previews/thinking.gif) | **Thinking** | A prompt is being worked on but no tool is running (the model is generating), or a subagent is still at work, including one sent to the background. |
 | ![](docs/previews/coding.gif) | **Coding** | `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, or a shell command that writes a file (`>`, `tee`, `sed -i`, `patch`). The computer pops up, he types, nods, pauses to read the screen, then packs it away. A quick edit still gets about four seconds of typing. |
 | ![](docs/previews/reading.gif) | **Reading** | `Read`, `WebFetch`, and read-only shell commands (`cat`, `head`, `ls`, `git diff`, ...). |
 | ![](docs/previews/searching.gif) | **Searching** | `Grep`, `Glob`, `WebSearch`, `ToolSearch`, and `grep`/`rg`/`find` in the shell. |
 | ![](docs/previews/running.gif) | **Running** | Other shell commands. He watches a little build box and taps a foot. |
-| ![](docs/previews/success.gif) | **Success** | Only after a build, test, lint or type-check command (`npm test`, `pytest`, `cargo build`, `tsc`, `make`, ...) exits successfully. One hop, then back to work. |
+| ![](docs/previews/success.gif) | **Success** | Only after a build, test, lint or type-check command (`npm test`, `pytest`, `cargo build`, `tsc`, `make`, ...) actually runs and exits successfully, with nothing such as a pipe, `\|\| true` or a later command deciding the result. Runs sent to the background don't count. One hop, then back to work. |
 | ![](docs/previews/attention.gif) | **Needs attention** | A permission dialog is open, Claude is asking you a question (`AskUserQuestion`), a plan waits for approval, or an MCP server asks for input. He raises an arm and waves until it's answered. |
-| ![](docs/previews/error.gif) | **Error** | A build/test/lint command fails, or a turn dies on an API error or refusal. A brief startle, then a puzzled scratch of the head, then back to whatever is happening. |
+| ![](docs/previews/error.gif) | **Error** | A build, test or check command runs and fails, or a turn dies on an API error or refusal. A command you decline, a blocked command or an interrupted one is no failure. A brief startle, then a puzzled scratch of the head, then back to whatever is happening. |
 | ![](docs/previews/resting.gif) | **Resting** | Three quiet minutes. He sits down, closes his eyes and breathes. Any activity wakes him with a stretch. |
 
 Attention and errors interrupt anything immediately. Other changes wait out a short minimum (no flicker during bursts of quick tool calls), except that moving *up* to typing is always immediate. A turn simply ending is never treated as success.
@@ -32,7 +32,7 @@ claude plugin marketplace add https://github.com/ford41b/for-claude-to-work-on.g
 claude plugin install claudeagotchi@claudeagotchi
 ```
 
-This installs at user scope, so he appears in every new Claude Code session, including the desktop app's Code tab. Start a new session (or restart the app) to see him above the prompt. No slash command is needed.
+This installs at user scope, so he loads in every new Claude Code session. Start a new session in the desktop app's Code tab (or restart the app) to see him above the prompt. No slash command is needed.
 
 ## Use
 
@@ -57,10 +57,10 @@ To keep him installed but off, use `/pet off`, or `claude plugin disable claudea
 
 ## Limitations
 
-- **Where he shows.** He draws as SVG, which the desktop app, the web and mobile apps, and the VS Code extension support. The plain terminal UI has no vector drawing, so there he stays out of the way and draws nothing. Other mods' rows in the band are kept and drawn below him.
+- **Where he shows.** In the desktop app's Code tab. The band above the prompt exists in the terminal and the desktop app, and the terminal can't draw vector art, so in a terminal he loads but draws nothing. Other mods' rows in the band are kept and drawn below him.
 - **One session each.** Every session has its own companion, following only its own activity, subagents included. `/pet` and `/pet motion` apply to the session you type them in right away, and to other sessions the next time they start.
 - **Guesses from shell commands.** Whether a shell command is coding, reading, searching or a test is judged from its text, not its effect. A test command's exit code decides success or failure. An interrupted command is neither.
-- **Permission dialogs.** These are detected from Claude Code's `PermissionRequest` event and end when the matching tool runs, is denied, or the turn ends. In Auto mode, calls the classifier decides never show a dialog, so he doesn't raise his arm for them.
+- **Permission dialogs.** Claude Code reports when a dialog opens but not the moment you approve it. So after you approve a command he keeps his arm up until that command finishes, is denied, or the turn ends. He never drops it while you might still need to answer. In Auto mode, calls the classifier decides never show a dialog, so he doesn't raise his arm for them.
 - **Success is narrow on purpose.** He only celebrates a build, test or check that passed. Answers, edits and ordinary commands earn no hop.
 
 ## Development

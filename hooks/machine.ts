@@ -1,19 +1,29 @@
 // What Claudeagotchi should be doing, decided from what the session is doing.
-// Pure: events mutate a Tracker, `decide` reads it at a time and says which
-// mood to show and when to ask again. No timers or engine calls live here.
+// Pure: events change a Tracker through the functions below, `decide` reads
+// it at a time and says which mood to show and when to ask again. No timers
+// or engine calls live here.
 
 import { playMs, type Mood } from './sprites'
 
 export type Activity = 'edit' | 'read' | 'search' | 'run' | 'ask' | 'other'
 
+export type Call = {
+  tool: string
+  activity: Activity
+  agentId?: string
+  startedAt: number
+  isChecked: boolean // its permission check allowed it to run
+  isWaiting: boolean // its permission dialog is open
+}
+
 export type Tracker = {
-  calls: Map<string, { activity: Activity; agentId?: string }> // tool calls in flight
-  permissions: string[] // tools whose permission dialog is open ('*' when unnamed)
+  calls: Map<string, Call> // tool calls in flight, by tool_use_id
+  strays: { tool: string; agentId?: string }[] // dialogs no call in flight matched
   elicitations: number // MCP servers waiting on a form
   isTurn: boolean // the main loop is working on a prompt
   agents: Set<string> // subagent loops seen working
   flash?: { mood: 'success' | 'error'; until: number }
-  owed?: number // an edit finished unseen: typing is still owed until then
+  owed?: number // an edit finished unseen: typing is owed until then
   lastActive: number
   shown: Mood
   shownAt: number
@@ -22,7 +32,7 @@ export type Tracker = {
 export function tracker(now: number): Tracker {
   return {
     calls: new Map(),
-    permissions: [],
+    strays: [],
     elicitations: 0,
     isTurn: false,
     agents: new Set(),
@@ -43,6 +53,10 @@ export const DWELL: Partial<Record<Mood, number>> = {
 }
 export const FLASH_MS = { success: 1900, error: 4500 }
 export const REST_AFTER_MS = 3 * 60_000
+export const OWED_MS = 3000
+// A call shows once its permission check allows it; one that is never checked
+// shows after this. Long enough for a permission dialog to claim it first.
+export const CHECK_GRACE_MS = 250
 
 const RANK: Partial<Record<Mood, number>> = {
   coding: 4,
@@ -61,19 +75,22 @@ const FOR: Record<Activity, Mood> = {
   search: 'searching',
   other: 'thinking',
 }
-const ORDER: Activity[] = ['ask', 'edit', 'run', 'search', 'read', 'other']
+const ORDER: Activity[] = ['edit', 'run', 'search', 'read', 'other']
+
+const isShowable = (c: Call, now: number) => c.isChecked || now - c.startedAt >= CHECK_GRACE_MS
 
 // What the session wants shown right now, ignoring how long the current mood
 // has been up.
 function wanted(t: Tracker, now: number): Mood {
-  if (t.permissions.length > 0 || t.elicitations > 0) return 'attention'
-  const busy = new Set([...t.calls.values()].map(c => c.activity))
-  if (busy.has('ask')) return 'attention'
+  const calls = [...t.calls.values()]
+  if (t.strays.length > 0 || t.elicitations > 0) return 'attention'
+  if (calls.some(c => c.isWaiting || c.activity === 'ask')) return 'attention'
   if (t.flash && now < t.flash.until) return t.flash.mood
+  const busy = new Set(calls.filter(c => isShowable(c, now)).map(c => c.activity))
   if (t.owed !== undefined && now < t.owed) busy.add('edit')
   const top = ORDER.find(a => busy.has(a))
   if (top) return FOR[top]
-  if (t.isTurn || t.agents.size > 0) return 'thinking'
+  if (t.isTurn || t.agents.size > 0 || calls.length > 0) return 'thinking'
   return now - t.lastActive >= REST_AFTER_MS ? 'resting' : 'idle'
 }
 
@@ -110,8 +127,76 @@ export function decide(t: Tracker, now: number): Decision {
     t.flash && now < t.flash.until ? t.flash.until : Infinity,
     t.owed !== undefined && now < t.owed ? t.owed : Infinity,
     mood === 'idle' ? t.lastActive + REST_AFTER_MS : Infinity,
+    ...[...t.calls.values()].filter(c => !isShowable(c, now)).map(c => c.startedAt + CHECK_GRACE_MS),
   ].filter(at => at > now)
   return { mood, nextAt: candidates.length ? Math.min(...candidates) : Infinity }
+}
+
+// ---------------------------------------------------------------- events
+
+export function startCall(t: Tracker, id: string, tool: string, activity: Activity, agentId: string | undefined, now: number) {
+  t.lastActive = now
+  if (agentId) t.agents.add(agentId)
+  t.calls.set(id, { tool, activity, agentId, startedAt: now, isChecked: false, isWaiting: false })
+}
+
+// The permission check's verdict: `allow` runs at once, `ask` may open a
+// dialog (or go to Auto mode's classifier), `deny` never runs.
+export function checkCall(t: Tracker, id: string, decision: 'allow' | 'ask' | 'deny') {
+  const call = t.calls.get(id)
+  if (!call) return
+  if (decision === 'allow') call.isChecked = true
+  if (decision === 'deny') t.calls.delete(id)
+}
+
+// A permission dialog opened. It carries no call id, so it belongs to the
+// newest unchecked call of that tool in that loop.
+export function openDialog(t: Tracker, tool: string, agentId: string | undefined) {
+  const call = [...t.calls.values()]
+    .filter(c => c.tool === tool && c.agentId === agentId && !c.isWaiting && !c.isChecked)
+    .sort((a, b) => b.startedAt - a.startedAt)[0]
+  if (call) call.isWaiting = true
+  else t.strays.push({ tool, agentId })
+}
+
+// Nothing marks the moment a dialog is approved, so a wait ends when its call
+// does, when it is denied, or when its turn ends: never while still open.
+export function denyCall(t: Tracker, id: string) {
+  t.calls.delete(id)
+}
+
+export function endCall(t: Tracker, id: string, now: number) {
+  const call = t.calls.get(id)
+  t.lastActive = now
+  t.calls.delete(id)
+  if (!call) return
+  t.strays = t.strays.filter(s => !(s.tool === call.tool && s.agentId === call.agentId))
+  // An edit that ran while something else was on screen (a celebration, a
+  // question, an error) still earns a short spell of typing afterwards.
+  if (call.activity === 'edit' && t.shown !== 'coding') {
+    const from = t.flash && now < t.flash.until ? t.flash.until : now
+    t.owed = from + OWED_MS
+  }
+}
+
+export function endTurn(t: Tracker, agentId: string | undefined, reason: string, now: number) {
+  t.lastActive = now
+  const mine = (a?: string) => a === agentId
+  for (const [id, call] of t.calls) if (mine(call.agentId)) t.calls.delete(id)
+  t.strays = t.strays.filter(s => !mine(s.agentId))
+  if (agentId) {
+    t.agents.delete(agentId)
+    return
+  }
+  t.isTurn = false
+  t.elicitations = 0
+  // An API failure or a refusal is a confirmed failure; an interrupt is not,
+  // and a turn that simply ended says nothing about success.
+  if (reason === 'error' || reason === 'refusal') flash(t, 'error', now)
+}
+
+export function flash(t: Tracker, mood: 'success' | 'error', now: number) {
+  t.flash = { mood, until: now + FLASH_MS[mood] }
 }
 
 // ---------------------------------------------------------------- tools
@@ -122,16 +207,33 @@ const SEARCH = new Set(['Grep', 'Glob', 'LS', 'WebSearch', 'ToolSearch', 'LSP'])
 const RUN = new Set(['Bash', 'PowerShell', 'BashOutput', 'TaskOutput', 'KillShell', 'Monitor'])
 const ASK = new Set(['AskUserQuestion', 'ExitPlanMode'])
 
+// A command with its quoted strings and heredoc bodies blanked out, so text
+// inside them (a `>` in a regex, `test` in a message) is never read as shell.
+function bare(command: string): string {
+  return command
+    .replace(/<<-?\s*(['"]?)(\w+)\1([^\n]*)\n[\s\S]*?\n\s*\2\s*(?=\n|$)/g, '<<H$3')
+    .replace(/'[^']*'|"(?:\\.|[^"\\])*"/g, "''")
+}
+
 // Shell commands that write files count as coding; ones that only look count
 // as reading or searching. A guess from the command's text, never its effect.
-const WRITES = /(^|[\s;&|(])(sed\s+-i|perl\s+-pi|tee|patch|apply_patch)\b|(^|[^0-9&>])>{1,2}\s*(?!&|\/dev\/null)[\w./~$"'-]/
+const WRITES = /(^|[\s;&|(])(sed\s+-i|perl\s+-pi|tee|patch|apply_patch)\b|(^|[^0-9&>])>{1,2}\s*(?!&|\/dev\/null)[\w./~$'-]/
 const SEARCHES = /^\s*(grep|rg|ag|find|fd|git\s+grep)\b/
-const READS = /^\s*(cat|head|tail|less|more|ls|tree|wc|file|stat|du|git\s+(log|show|diff|status|blame))\b/
+const READS = /^\s*(cat|head|tail|less|more|ls|tree|wc|file|stat|du|sed\s+-n|git\s+(log|show|diff|status|blame))\b/
 
-// Builds, tests, linters and type checks: the commands whose exit says
-// whether the work succeeded.
-const VERIFIES =
-  /\b(test|tests|spec|jest|vitest|pytest|mocha|rspec|phpunit|ctest|tox|tsc|typecheck|lint|eslint|ruff|mypy|clippy|build|make|cargo|gradlew?|mvn|dotnet|xcodebuild)\b/
+// Builds, tests, linters and type checks, matched as the program that runs.
+const RUNNERS =
+  /^(jest|vitest|pytest|py\.test|mocha|rspec|phpunit|ctest|tox|nox|tsc|eslint|ruff|mypy|pyright|flake8|make|\.?\/?gradlew|gradle|\.?\/?mvnw|mvn|xcodebuild|swift\s+(build|test)|cargo\s+(test|build|check|clippy|nextest)|go\s+(test|build|vet)|dotnet\s+(test|build)|deno\s+(test|check|lint)|bun\s+test|npm\s+t|(npm|pnpm|yarn|bun)\s+(run\s+)?(test|build|lint|typecheck|type-check|check)(:\S*)?|claude\s+plugin\s+(test|validate))(\s|$)/
+const PREFIXES = /^((\w+=\S*|env|time|npx|bunx|pnpm\s+(exec|dlx)|yarn\s+dlx|uv\s+run|poetry\s+run|python3?\s+-m)\s+)+/
+
+// Whether the command's exit status is a build, test or check's own verdict:
+// some `&&` step runs one, and no pipe, `||`, `;` or background `&` lets
+// another command decide the status instead.
+export function isVerifyCommand(command: string): boolean {
+  const plain = bare(command).replace(/\d*>&\d*|&>>?/g, ' ').replace(/&&/g, '\u0000')
+  if (/[|;&\n]/.test(plain)) return false
+  return plain.split('\u0000').some(step => RUNNERS.test(step.trim().replace(PREFIXES, '')))
+}
 
 export function classify(tool: string, input: Record<string, unknown>): { activity: Activity; verifies: boolean } {
   if (EDIT.has(tool)) return { activity: 'edit', verifies: false }
@@ -140,32 +242,19 @@ export function classify(tool: string, input: Record<string, unknown>): { activi
   if (ASK.has(tool)) return { activity: 'ask', verifies: false }
   if (RUN.has(tool)) {
     const command = typeof input.command === 'string' ? input.command : ''
-    if (WRITES.test(command)) return { activity: 'edit', verifies: false }
-    if (SEARCHES.test(command)) return { activity: 'search', verifies: false }
-    if (READS.test(command) && !/[;&|]/.test(command)) return { activity: 'read', verifies: false }
-    return { activity: 'run', verifies: tool !== 'BashOutput' && VERIFIES.test(command) }
+    const plain = bare(command)
+    if (WRITES.test(plain)) return { activity: 'edit', verifies: false }
+    if (SEARCHES.test(plain)) return { activity: 'search', verifies: false }
+    if (READS.test(plain) && !/[;&|]/.test(plain)) return { activity: 'read', verifies: false }
+    const isForeground = (tool === 'Bash' || tool === 'PowerShell') && input.run_in_background !== true
+    return { activity: 'run', verifies: isForeground && isVerifyCommand(command) }
   }
   return { activity: 'other', verifies: false }
 }
 
-// A tool result as `tool.call` sees it, reduced to what the pet cares about.
-export type Outcome = { isDenied: boolean; isError: boolean; text?: string }
-
-export function verdict(outcome: Outcome): 'success' | 'error' | undefined {
-  if (outcome.isDenied) return undefined
-  if (outcome.isError) return /interrupted/i.test(outcome.text ?? '') ? undefined : 'error'
-  return 'success'
-}
-
-// An edit that started and finished while something else was on screen
-// (a celebration, a question) still earns a short spell of typing.
-export const OWED_MS = 3000
-
-export function finishEdit(t: Tracker, now: number, isShowing: boolean) {
-  if (!isShowing) t.owed = now + OWED_MS
-}
-
-// The permission waits a tool call answers: its own and any unnamed one.
-export function answerPermission(t: Tracker, tool: string) {
-  t.permissions = t.permissions.filter(p => p !== tool && p !== '*')
+// Whether a finished command was moved to the background, so its exit says
+// nothing yet about the work.
+export function wasBackgrounded(response: unknown): boolean {
+  const r = (response ?? {}) as { backgroundTaskId?: unknown; backgroundedByUser?: unknown; timedOutAfterMs?: unknown }
+  return !!(r.backgroundTaskId || r.backgroundedByUser || r.timedOutAfterMs)
 }

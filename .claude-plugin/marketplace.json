@@ -1,6 +1,7 @@
 {
   "name": "claudeagotchi",
   "owner": { "name": "Ford Gaultney" },
+  "description": "Claudeagotchi, a pixel companion mod for Claude Code",
   "plugins": [
     {
       "name": "claudeagotchi",
