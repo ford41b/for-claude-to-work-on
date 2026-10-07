@@ -1,0 +1,11 @@
+{
+  "name": "claudeagotchi",
+  "owner": { "name": "Ford Gaultney" },
+  "plugins": [
+    {
+      "name": "claudeagotchi",
+      "source": "./",
+      "description": "A tiny orange pixel companion above the prompt that acts out what Claude is doing."
+    }
+  ]
+}
