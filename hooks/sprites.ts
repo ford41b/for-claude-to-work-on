@@ -8,6 +8,8 @@ export const W = 52
 export const H = 26
 export const SCALE = 3
 const GROUND = H - 1
+// A black stage behind him, so he stands out from whatever surrounds the band.
+const BACKDROP = `<rect width="${W}" height="${H}" fill="#000000"/>`
 
 const PALETTE = {
   body: '#C7785C',
@@ -698,7 +700,7 @@ export type PetDrawing = { source: string; alt: string; width: number; height: n
 
 export function drawPet(mood: Mood, opts: { variant?: number; reducedMotion?: boolean } = {}): PetDrawing {
   const scene = SCENES[mood](opts.variant ?? 0)
-  const head = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * SCALE}" height="${H * SCALE}" shape-rendering="crispEdges">`
+  const head = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * SCALE}" height="${H * SCALE}" shape-rendering="crispEdges">${BACKDROP}`
   const size = { alt: scene.alt, width: W * SCALE, height: H * SCALE }
   if (opts.reducedMotion) {
     return { ...size, source: `${head}${frameSvg(scene.still)}</svg>`, isAnimated: false }
@@ -767,7 +769,7 @@ export function drawPet(mood: Mood, opts: { variant?: number; reducedMotion?: bo
 export function framesOf(mood: Mood, variant = 0): { ms: number; svg: string; phase: 'intro' | 'loop' }[] {
   const scene = SCENES[mood](variant)
   const wrap = (body: string) =>
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * SCALE}" height="${H * SCALE}" shape-rendering="crispEdges">${body}</svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * SCALE}" height="${H * SCALE}" shape-rendering="crispEdges">${BACKDROP}${body}</svg>`
   return [
     ...(scene.intro ?? []).map(fr => ({ ms: fr.ms, svg: wrap(frameSvg(fr.draw)), phase: 'intro' as const })),
     ...(scene.loop ?? []).map(fr => ({ ms: fr.ms, svg: wrap(frameSvg(fr.draw)), phase: 'loop' as const })),
