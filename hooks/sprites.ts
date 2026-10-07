@@ -8,8 +8,8 @@ export const W = 52
 export const H = 26
 export const SCALE = 3
 const GROUND = H - 1
-// A black stage behind him, so he stands out from whatever surrounds the band.
-const BACKDROP = `<rect width="${W}" height="${H}" fill="#000000"/>`
+// A dark gray stage behind him, so he stands out from whatever surrounds the band.
+const BACKDROP = `<rect width="${W}" height="${H}" fill="#212121"/>`
 
 const PALETTE = {
   body: '#C7785C',
