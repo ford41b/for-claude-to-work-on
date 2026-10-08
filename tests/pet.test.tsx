@@ -49,6 +49,7 @@ function world(on: On, opts: { store?: Record<string, unknown> } = {}) {
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('tool.register', ($, e) => ({ value: { name: e.name } }) as never)
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', () => ({ text: '' }))
   on('tool.check', ($, e) => {
@@ -692,5 +693,27 @@ describe('the cache panel and the handoff', () => {
     expect(handoff.submitted).toHaveLength(0)
     expect(handoff.filled[0]).toContain('THE BRIEF')
     expect(await ui.find({ type: 'Text', text: /brief is in your prompt box/ })).toBeDefined()
+  })
+})
+
+describe('the progress bars', () => {
+  test('a plan Claude sends draws a bar beneath him, in his orange', async ($, on) => {
+    const { start } = world(on)
+    await start($)
+    const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+    expect(await ui.findAll({ type: 'Svg' })).toHaveLength(1)
+    const made = await $.tool.call({
+      tool: 'mcp__claudeagotchi__plan_progress',
+      id: 'demo',
+      title: 'Demo',
+      stages: [{ name: 'Work', steps: [{ title: 'A' }, { title: 'B' }] }],
+    } as never)
+    expect(String(made.result)).toBe('demo: 0/2, running, active "A"')
+    const svgs = await ui.findAll({ type: 'Svg' })
+    expect(svgs.length).toBeGreaterThan(1)
+    expect(String(svgs[0]?.props.alt)).toContain('Claudeagotchi') // he stays on top
+    const bar = svgs.find(s => String(s.props.alt).startsWith('Demo'))
+    expect(String(bar?.props.source)).toContain('#B05A3A')
+    expect(await ui.find({ type: 'Text', text: OTHER })).toBeDefined() // other mods' rows still drawn
   })
 })

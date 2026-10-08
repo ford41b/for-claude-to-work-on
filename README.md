@@ -4,7 +4,7 @@ A tiny orange pixel companion that lives in the band above the prompt in Claude 
 
 ![Claudeagotchi typing at his computer](docs/previews/coding.gif)
 
-He is a native Claude Code mod: a plugin of function hooks. He only watches. Every hook passes its event on unchanged and returns exactly what Claude Code answered, so tools, results and permissions are never touched. He uses no network and animates locally from built-in pixel art. He makes no model calls, except one when you confirm a handoff (see below).
+He is a native Claude Code mod: a plugin of function hooks. He himself only watches: his hooks pass every event on unchanged, so tools, results and permissions are never touched. He uses no network and animates locally from built-in pixel art. He makes no model calls, except one when you confirm a handoff (see below). The progress bars below him do steer Claude a little, as described in their section.
 
 ## What he does
 
@@ -32,6 +32,31 @@ Click the button to show **Hand off to a fresh session** under it, and click it 
 The countdown is an estimate from your side. The service can drop a cache entry early, so treat **COLD** as certain and the time left as an upper bound. Subagents cache their own prompts, so their requests don't reset it.
 
 The cache timing follows the [Cache TTL Timer](https://github.com/WQGGSEY/cache-ttl-timer) mod by Seongje Hong (MIT).
+
+## Progress bars
+
+Under him, live progress bars show how far along Claude's work is. When Claude takes on a task with several steps, it splits the task into stages and steps, and the bar fills with orange pixels as it goes. The bars come from [plan-progress](https://github.com/zycck/claude-mods) by Kirill Serditov and work as they do there, recolored to his black and orange.
+
+- **One row per task:** state, title, bar, percent and a close button.
+- **The pill** on the bar shows the current stage. Hover it for the time spent so far.
+- **Marks on the track:** stages are capsules and steps are dots. Hover one to see when it was reached.
+- **Colors:** orange while running, gold when Claude needs your input, red on an error, and green with the total time when done.
+- **Subagents:** each one gets a row under its task, with its name, model and effort, current tool and time.
+- **Changing plans:** the plan can change mid-run, and finished steps are kept by title.
+- **Saved bars:** bars are saved per session and come back when you resume it.
+- **Sounds:** short sounds play for a question, an error and completion.
+- **Buttons:** a **Progress** button in the footer shows or hides the bars.
+
+How it steers Claude: the mod adds a `plan_progress` tool and a short rule to Claude's system prompt.
+- **Before editing:** if Claude starts a fourth edit in a turn without a bar, that edit is refused once, with a note to create one first.
+- **At the end of a turn:** if Claude ends a turn that did work while a bar is still open and unexplained, it is sent back once to update the bar.
+- **Cost:** each update is a small tool call, so expect a few extra tokens per task.
+
+| Command | Does |
+| --- | --- |
+| `/progress` | Show or hide the bars. |
+| `/progress-clear` | Remove all bars. |
+| `/progress-agents` | Fold or show the agent rows under the bars. |
 
 ## How states change
 
@@ -78,6 +103,7 @@ To keep him installed but off, use `/pet off`, or `claude plugin disable claudea
 - **Guesses from shell commands.** Whether a shell command is coding, reading, searching or a test is judged from its text, not its effect. A test command's exit code decides success or failure. An interrupted command is neither.
 - **Permission dialogs.** Claude Code reports when a dialog opens but not the moment you approve it. So after you approve a command he keeps his arm up until that command finishes, is denied, or the turn ends. He never drops it while you might still need to answer. In Auto mode, calls the classifier decides never show a dialog, so he doesn't raise his arm for them.
 - **Clicking him.** The app shows his drawing as a picture that can't be clicked, so the handoff opens from the countdown button instead.
+- **The bars in the terminal.** Unlike him, the progress bars also draw in a terminal, as a character grid.
 - **Reading the transcript.** To learn the TTL, he reads the end of the session's transcript (`~/.claude/projects/...`) with `tail`, looking only at timestamps and cache token counts. On Windows, where `tail` isn't available, he uses the TTL he last saw, or 5 minutes, and `/pet cache` sets it.
 - **Success is narrow on purpose.** He only celebrates a build, test or check that passed. Answers, edits and ordinary commands earn no hop.
 

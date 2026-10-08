@@ -1,7 +1,9 @@
 {
   "name": "claudeagotchi",
-  "version": "0.3.1",
-  "description": "A tiny orange pixel companion above the prompt that acts out what Claude is doing: typing at his computer while Claude codes.",
-  "author": { "name": "Ford Gaultney" },
+  "version": "0.4.0",
+  "description": "A tiny orange pixel companion above the prompt that acts out what Claude is doing, with live progress bars, a prompt-cache countdown and a fresh-session handoff.",
+  "author": {
+    "name": "Ford Gaultney"
+  },
   "types": "./types/index.d.ts"
 }
