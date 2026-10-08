@@ -11,17 +11,13 @@ import {
   endCall,
   endTurn,
   flash,
-  freshProgress,
-  noteCall,
   openDialog,
-  progressOf,
   startCall,
   tracker,
   wasBackgrounded,
   type Tracker,
 } from './machine'
-import { drawPanel, type PanelMotion } from './panel'
-import { drawPet, MOODS, playMs, walkMs, type PetDrawing } from './sprites'
+import { drawPet, MOODS, playMs, type PetDrawing } from './sprites'
 
 // Claudeagotchi: a little orange companion in the band above the prompt that
 // acts out what this session is doing. It only watches: every hook hands the
@@ -32,13 +28,12 @@ const view = atom({ plugin: 'claudeagotchi', key: 'view' } as const, {
   variant: 0,
   seq: 0,
   preview: null,
-  from: 0,
-  to: 0,
 } as PetView)
 const settings = atom({ plugin: 'claudeagotchi', key: 'settings' } as const, {
   isEnabled: true,
   isReducedMotion: false,
 } as PetSettings)
+
 const cache = atom({ plugin: 'claudeagotchi', key: 'cache' } as const, {
   lastHit: null,
   detected: null,
@@ -47,7 +42,6 @@ const cache = atom({ plugin: 'claudeagotchi', key: 'cache' } as const, {
 } as PetCache)
 const panel = atom({ plugin: 'claudeagotchi', key: 'panel' } as const, {
   isOpen: false,
-  changedAt: 0,
   phase: 'idle',
   note: '',
 } as PetPanel)
@@ -56,15 +50,7 @@ const ONE_SHOT = new Set<PetMood>(['success', 'waking', 'unpacking'])
 const PREVIEW_ORDER = MOODS.filter(m => m !== 'unpacking' && m !== 'waking')
 const PREVIEW_MS: Partial<Record<PetMood, number>> = { coding: 9000, resting: 9800 }
 const PREVIEW_LOOP_MS = 5200
-// The desktop lays the band out in columns of its monospace metric; this many
-// CSS px each turns the band's width into the strip he walks along.
-const PX_PER_COLUMN = 8
-// He moves along the strip only once the task has moved on this much.
-const MIN_STRIDE = 0.04
-// The panel's button sits at the strip's right end, about this many columns wide.
-const BUTTON_COLUMNS = 10
-// How long the panel takes to grow out of him or shrink back, with a margin.
-const MOTION_MS = 300
+
 // How much of the transcript's end to read for the cache: enough to hold the
 // last response after a large tool result.
 const TAIL_BYTES = '4000000'
@@ -91,14 +77,10 @@ const pet = {
   previewTimer: undefined as Timer | undefined,
   previewRun: 0, // bumped by every start and stop, so a stale step stands down
   isWorkingPending: false,
-  progress: freshProgress(),
-  walk: { from: 0, to: 0, start: 0, ms: 0 }, // his latest walk along the strip
-  stripPx: 600,
-  ticker: undefined as Timer | undefined,
-  drawnKey: '', // what the cache readout and panel last drew, so the ticker redraws only on change
-  wasOpen: false,
   queue: Promise.resolve() as Promise<void>,
   nextId: 0,
+  ticker: undefined as Timer | undefined,
+  drawnKey: '', // what the cache readout last drew, so the ticker redraws only on change
 }
 
 // Every change goes through here, one at a time, stamped with the clock.
@@ -113,22 +95,8 @@ function act($: Dollar, change?: (t: Tracker, now: number) => void): Promise<voi
   return pet.queue
 }
 
-// Where along the strip he is right now, partway through a walk or not.
-function positionAt(now: number): number {
-  const w = pet.walk
-  if (w.ms <= 0 || now >= w.start + w.ms) return w.to
-  return w.from + ((w.to - w.from) * (now - w.start)) / w.ms
-}
-
-// Starts a walk from wherever he is to `to` (staying put when they match).
-function walkTo(now: number, to: number) {
-  const from = positionAt(now)
-  pet.walk = { from, to, start: now, ms: walkMs({ px: pet.stripPx, from, to }) }
-}
-
-// Decides the mood and his place on the strip, draws them when they changed,
-// and sleeps until the next moment the decision could change: no polling
-// while nothing happens.
+// Decides the mood, draws it when it changed, and sleeps until the next
+// moment the decision could change: no polling while nothing happens.
 async function show($: Dollar, now: number) {
   pet.timer?.cancel()
   pet.timer = undefined
@@ -136,32 +104,17 @@ async function show($: Dollar, now: number) {
   const { mood, nextAt } = decide(t, now)
   // Something real needs the person: a preview gives way at once.
   if (pet.isPreviewing && (mood === 'attention' || mood === 'error')) await stopPreview($)
-  const isMoodChange = mood !== t.shown
-  // He walks between activities, or while idle or thinking, toward how far
-  // the task has come; never while something needs the person, nor asleep.
-  const isUrgent = mood === 'attention' || mood === 'error'
-  const goal = progressOf(pet.progress)
-  // While the panel is open beside him he holds his place, so he never walks under it.
-  const isHeld = (await read($, panel)).isOpen
-  const mayWalk = !isHeld && !isUrgent && mood !== 'resting' && (isMoodChange || mood === 'idle' || mood === 'thinking')
-  const isStride = mayWalk && Math.abs(goal - pet.walk.to) >= MIN_STRIDE
-  if (isUrgent && isMoodChange) walkTo(now, positionAt(now)) // stop where he stands
-  else if (isStride) walkTo(now, goal)
-  else if (isMoodChange) walkTo(now, pet.walk.to) // carry on any walk under way
-  if (isMoodChange) {
+  if (mood !== t.shown) {
     t.shown = mood
     t.shownAt = now
-  }
-  if ((isMoodChange || isStride) && !pet.isPreviewing) {
-    const { from, to } = pet.walk
-    await update($, view, v => ({
-      ...v,
-      mood,
-      from,
-      to,
-      seq: v.seq + 1,
-      variant: mood === 'idle' && isMoodChange ? (v.variant + 1) % 2 : v.variant,
-    }))
+    if (!pet.isPreviewing) {
+      await update($, view, v => ({
+        ...v,
+        mood,
+        seq: v.seq + 1,
+        variant: mood === 'idle' ? (v.variant + 1) % 2 : v.variant,
+      }))
+    }
   }
   if (Number.isFinite(nextAt)) pet.timer = $.clock.after(Math.max(1, nextAt - now), () => void act($))
 }
@@ -171,10 +124,7 @@ async function stopPreview($: Dollar) {
   pet.previewRun++
   pet.previewTimer?.cancel()
   pet.previewTimer = undefined
-  const now = await $.clock.now()
-  walkTo(now, pet.walk.to)
-  const { from, to } = pet.walk
-  await update($, view, v => ({ ...v, preview: null, mood: pet.t.shown, from, to, seq: v.seq + 1 }))
+  await update($, view, v => ({ ...v, preview: null, mood: pet.t.shown, seq: v.seq + 1 }))
 }
 
 // Plays every mood in turn from local artwork alone: no model, no tools.
@@ -182,10 +132,7 @@ async function previewStep($: Dollar, run: number, i: number) {
   const mood = PREVIEW_ORDER[i]
   if (run !== pet.previewRun) return
   if (!mood) return stopPreview($)
-  // He walks the strip from end to end over the preview.
-  walkTo(await $.clock.now(), i / (PREVIEW_ORDER.length - 1))
-  const { from, to } = pet.walk
-  await update($, view, v => ({ ...v, preview: mood, mood, from, to, seq: v.seq + 1 }))
+  await update($, view, v => ({ ...v, preview: mood, mood, seq: v.seq + 1 }))
   if (run !== pet.previewRun) {
     // Stopped while this step was being drawn: put the live mood back.
     await update($, view, v => ({ ...v, preview: null, mood: pet.t.shown, seq: v.seq + 1 }))
@@ -270,17 +217,9 @@ async function transcriptPath($: Dollar): Promise<string | null> {
   return null
 }
 
-// Once a second: redraw when the countdown or the panel changed, and let him
-// walk on once the panel has closed.
+// Once a second: redraw when the countdown changed.
 async function tick($: Dollar) {
-  const now = await $.clock.now()
-  const p = await read($, panel)
-  const isMoving = now - p.changedAt < MOTION_MS
-  const key = `${readoutKey(readout(await read($, cache), now))}|${p.isOpen}|${isMoving}`
-  if (p.isOpen !== pet.wasOpen) {
-    pet.wasOpen = p.isOpen
-    if (!p.isOpen && pet.isEnabled) void act($)
-  }
+  const key = readoutKey(readout(await read($, cache), await $.clock.now()))
   if (key === pet.drawnKey) return
   pet.drawnKey = key
   $.ui.invalidate('ui.render')
@@ -302,15 +241,14 @@ async function cacheStatus($: Dollar): Promise<string> {
   return `${head} · last request ${clockText(now - c.lastHit)} ago · ${state}`
 }
 
-// The panel and the handoff ------------------------------------------------
+// The handoff ------------------------------------------------
 
 async function setPanelOpen($: Dollar, isOpen: boolean) {
-  const now = await $.clock.now()
   await update($, panel, (p): PetPanel => {
     if (p.isOpen === isOpen) return p
     // Closing leaves a handoff under way alone; it was only the confirm step.
     const phase = isOpen || p.phase === 'writing' || p.phase === 'sending' ? p.phase : 'idle'
-    return { ...p, isOpen, changedAt: now, phase, note: phase === 'idle' ? '' : p.note }
+    return { ...p, isOpen, phase, note: phase === 'idle' ? '' : p.note }
   })
 }
 
@@ -351,21 +289,16 @@ async function handOff($: Dollar) {
     return setPhase($, 'error', "Couldn't start fresh, so the brief is in your prompt box: run /clear, then send it.")
   }
   await update($, cache, c => ({ ...c, lastHit: null, detected: null }))
-  await update($, panel, (): PetPanel => ({ isOpen: false, changedAt: 0, phase: 'idle', note: '' }))
+  await update($, panel, (): PetPanel => ({ isOpen: false, phase: 'idle', note: '' }))
   await $.prompt.submit({ text: brief })
 }
 
 const drawings = new Map<string, PetDrawing>()
 
-function drawingOf(v: PetView, isReducedMotion: boolean, stripPx: number): PetDrawing {
-  const { mood, variant, seq } = v
-  const strip = { px: stripPx, from: v.from ?? 0, to: v.to ?? 0 }
-  const key = `${mood}:${variant}:${isReducedMotion}:${strip.px}:${strip.from}:${strip.to}`
+function drawingOf(mood: PetMood, variant: number, isReducedMotion: boolean, seq: number): PetDrawing {
+  const key = `${mood}:${variant}:${isReducedMotion}`
   let d = drawings.get(key)
-  if (!d) {
-    if (drawings.size > 48) drawings.clear()
-    drawings.set(key, (d = drawPet(mood, { variant, reducedMotion: isReducedMotion, strip })))
-  }
+  if (!d) drawings.set(key, (d = drawPet(mood, { variant, reducedMotion: isReducedMotion })))
   // A one-shot replays only from a fresh document, so its source changes per showing.
   if (!ONE_SHOT.has(mood) || isReducedMotion) return d
   return { ...d, source: d.source.replace('</svg>', `<!--${seq}--></svg>`) }
@@ -487,7 +420,6 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     void act($, (t, now) => {
-      pet.progress = freshProgress() // a new task: back to the left end
       t.isTurn = true
       t.lastActive = now
     })
@@ -497,10 +429,7 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const agentId = e.agentId
     const reason = e.reason
-    void act($, (t, now) => {
-      endTurn(t, agentId, reason, now)
-      if (!agentId && reason === 'answer') pet.progress.isDone = true // all the way across
-    })
+    void act($, (t, now) => endTurn(t, agentId, reason, now))
     return next(e)
   })
 
@@ -511,11 +440,7 @@ export const register: Register = on => {
     const tool = String(e.tool)
     const agentId = e.agentId
     const { activity } = classify(tool, e as unknown as Record<string, unknown>)
-    const input = e as unknown as Record<string, unknown>
-    void act($, (t, now) => {
-      startCall(t, id, tool, activity, agentId, now)
-      noteCall(pet.progress, tool, input)
-    })
+    void act($, (t, now) => startCall(t, id, tool, activity, agentId, now))
     let launched: string | undefined
     try {
       const result = await next(e)
@@ -604,32 +529,20 @@ export const register: Register = on => {
       })
     }
     const { Box, Button, Svg, Text } = $.ui.resolve(e)
-    pet.stripPx = Math.max(156, Math.round((e.props.bodyColumns - BUTTON_COLUMNS) * PX_PER_COLUMN))
-    const d = drawingOf(v, isReducedMotion, pet.stripPx)
-    const now = await $.clock.now()
-    const r = readout(await read($, cache), now)
+    const d = drawingOf(v.mood, v.variant, isReducedMotion, v.seq)
+    const r = readout(await read($, cache), await $.clock.now())
     const p = await read($, panel)
-    // The panel grows out of him while it opens and shrinks back as it closes.
-    const sinceChange = now - p.changedAt
-    const motion: PanelMotion | null = p.isOpen ? (sinceChange < MOTION_MS ? 'opening' : 'open') : sinceChange < MOTION_MS ? 'closing' : null
-    const overlay = motion && drawPanel({ px: pet.stripPx, to: v.to ?? 0, readout: r, motion, reducedMotion: isReducedMotion })
-    const toggle = () => void setPanelOpen($, !p.isOpen)
     return (
       <Box flexDirection="column">
-        <Box flexDirection="row" alignItems="flex-end">
-          <Box position="relative">
+        <Box flexDirection="row" alignItems="flex-end" justifyContent="space-between" width={e.props.bodyColumns}>
+          <Box flexDirection="row" alignItems="flex-end">
             <Svg source={d.source} alt={d.alt} width={d.width} height={d.height} isInteractive={d.isAnimated} />
-            {overlay && (
-              <Box position="absolute" top={0} left={0}>
-                <Svg source={overlay.source} alt={`Prompt cache: ${r.label}`} width={overlay.width} height={overlay.height} />
-              </Box>
-            )}
+            {v.preview && <Text dimColor> preview: {v.preview}</Text>}
           </Box>
-          <Button key="claudeagotchi-panel" label={`${r.glyph} ${r.label}`} dimColor={r.level !== 'red'} onPress={toggle} />
-          {v.preview && <Text dimColor> preview: {v.preview}</Text>}
+          <Button key="claudeagotchi-panel" label={`${r.glyph} ${r.label}`} dimColor={r.level !== 'red'} onPress={() => void setPanelOpen($, !p.isOpen)} />
         </Box>
         {p.isOpen && (
-          <Box flexDirection="row" columnGap={1} justifyContent={overlay?.place?.side === 'left' ? 'flex-start' : 'flex-end'} width={e.props.bodyColumns}>
+          <Box flexDirection="row" columnGap={1} justifyContent="flex-end" width={e.props.bodyColumns}>
             {p.phase === 'confirm' ? (
               <>
                 <Text>Start fresh with handoff?</Text>

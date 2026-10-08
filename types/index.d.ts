@@ -13,9 +13,8 @@ export type PetMood =
   | 'unpacking'
 
 // What the band draws: the mood, which idle variant, a counter that restarts
-// one-shot animations, the mood a preview is showing (null outside one), and
-// where on the strip he walks from and to (0 the left end, 1 the right).
-export type PetView = { mood: PetMood; variant: number; seq: number; preview: PetMood | null; from: number; to: number }
+// one-shot animations, and the mood a preview is showing (null outside one).
+export type PetView = { mood: PetMood; variant: number; seq: number; preview: PetMood | null }
 
 // The person's choices, mirrored from the plugin's store so they persist.
 export type PetSettings = { isEnabled: boolean; isReducedMotion: boolean }
@@ -28,10 +27,10 @@ export type PetTtl = '5m' | '1h'
 // one set with /pet cache, and the last one any session saw.
 export type PetCache = { lastHit: number | null; detected: PetTtl | null; override: PetTtl | null; remembered: PetTtl | null }
 
-// The info panel beside him: open or not, when that last changed (for its
-// grow and shrink), and where the handoff stands.
+// The handoff row under him, opened by the cache button: open or not, and
+// where the handoff stands.
 export type PetPanelPhase = 'idle' | 'confirm' | 'writing' | 'sending' | 'error'
-export type PetPanel = { isOpen: boolean; changedAt: number; phase: PetPanelPhase; note: string }
+export type PetPanel = { isOpen: boolean; phase: PetPanelPhase; note: string }
 
 declare module 'claude-code' {
   interface PluginState {

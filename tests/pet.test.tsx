@@ -3,10 +3,8 @@ import type { Engine, MockClock } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import type { PetSettings, PetView } from '../types'
-import { classify, freshProgress, isVerifyCommand, noteCall, progressOf } from '../hooks/machine'
-import { drawPet } from '../hooks/sprites'
+import { classify, isVerifyCommand } from '../hooks/machine'
 import { parseTail, readout } from '../hooks/cache'
-import { placePanel } from '../hooks/panel'
 
 // Simulated sessions: the test stands in for the engine beneath the plugin.
 // Its tools behave the way a real session was seen to: the permission check
@@ -585,97 +583,6 @@ describe('/pet', () => {
   })
 })
 
-describe('walking the strip as the task progresses', () => {
-  test('a new task starts him at the left, steps move him right, the answer takes him to the end', async ($, on) => {
-    const { clock, start, call, pet } = world(on)
-    await start($)
-    await $.turn.start({ text: 'build it', turnId: 't1' })
-    await clock.settle()
-    expect(pet.view?.to).toBe(0)
-    call($, { tool: 'Read', file_path: '/work/a.ts' })
-    await clock.advance(3000)
-    const early = pet.view?.to ?? 0
-    expect(early).toBeGreaterThan(0)
-    for (let i = 0; i < 6; i++) {
-      call($, { tool: 'Bash', command: `npm run step${i}` })
-      await clock.advance(3000)
-    }
-    const later = pet.view?.to ?? 0
-    expect(later).toBeGreaterThan(early)
-    expect(later).toBeLessThan(0.9) // never at the end before the answer
-    await $.turn.complete(turnEnd('t1'))
-    await clock.advance(3000)
-    expect(pet.view?.to).toBe(1)
-
-    await $.turn.start({ text: 'next thing', turnId: 't2' })
-    await clock.settle()
-    expect(pet.view?.to).toBe(0) // walks back to the start
-  })
-
-  test("Claude's task list sets how far along he is", async ($, on) => {
-    const { clock, start, call, pet } = world(on)
-    await start($)
-    await $.turn.start({ text: 'do four things', turnId: 't1' })
-    const todos = [
-      { content: 'a', status: 'completed', activeForm: 'a' },
-      { content: 'b', status: 'completed', activeForm: 'b' },
-      { content: 'c', status: 'in_progress', activeForm: 'c' },
-      { content: 'd', status: 'pending', activeForm: 'd' },
-    ]
-    call($, { tool: 'TodoWrite', todos })
-    await clock.advance(3000)
-    expect(Math.abs((pet.view?.to ?? 0) - 0.95 * (2.5 / 4))).toBeLessThan(1e-9)
-  })
-
-  test('he never walks off while something needs the person', async ($, on) => {
-    const { clock, asks, start, call, pet } = world(on)
-    await start($)
-    await $.turn.start({ text: 'go', turnId: 't1' })
-    for (let i = 0; i < 4; i++) {
-      call($, { tool: 'Bash', command: `npm run step${i}` })
-      await clock.advance(3000)
-    }
-    asks.set('rm -rf build', { afterMs: 60_000 })
-    call($, { tool: 'Bash', command: 'rm -rf build' })
-    await clock.settle()
-    expect(pet.view?.mood).toBe('attention')
-    expect(pet.view?.from).toBe(pet.view?.to)
-  })
-
-  test('the strip spans the band and he steps along it with moving legs', async ($, on) => {
-    const { clock, start, call } = world(on)
-    await start($)
-    const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-    expect((await ui.find({ type: 'Svg' }))?.props.width).toBe(720) // the panel's button takes the rest
-    await $.turn.start({ text: 'go', turnId: 't1' })
-    await clock.advance(3000) // back at the left end
-    call($, { tool: 'Read', file_path: '/work/a.ts' })
-    await clock.settle() // the step that sets him walking
-    const source = String((await ui.find({ type: 'Svg' }))?.props.source)
-    expect(source).toContain('<animateTransform')
-    expect(source).toContain('calcMode="discrete"')
-    expect(source).toContain('repeatDur=') // the stride plays only while he walks
-  })
-
-  test('progress creeps but never finishes on its own', () => {
-    const p = freshProgress()
-    expect(progressOf(p)).toBe(0)
-    for (let i = 0; i < 100; i++) noteCall(p, 'Bash', { command: 'ls' })
-    expect(progressOf(p)).toBeLessThan(0.86)
-    p.isDone = true
-    expect(progressOf(p)).toBe(1)
-  })
-
-  test('a walk draws the stride first, then the activity, on whole art pixels', () => {
-    const d = drawPet('coding', { strip: { px: 600, from: 0, to: 0.5 } })
-    expect(d.width).toBe(600)
-    const values = /values="([^"]*)" dur/.exec(d.source)?.[1] ?? ''
-    for (const v of values.split(';')) expect(Number(v.split(' ')[0]) % 3).toBe(0)
-    const still = drawPet('coding', { strip: { px: 600, from: 0.5, to: 0.5 } })
-    expect(still.source).not.toContain('<animateTransform')
-  })
-})
-
 describe('the cache panel and the handoff', () => {
   const label = async (ui: { find: (q: { key: string }) => Promise<{ props: Record<string, unknown> } | undefined> }) =>
     String((await ui.find({ key: 'claudeagotchi-panel' }))?.props.label)
@@ -731,44 +638,17 @@ describe('the cache panel and the handoff', () => {
     expect(parseTail('nothing here')).toBeNull()
   })
 
-  test('the panel grows out of him, he holds still while it is open, and it shrinks back', async ($, on) => {
-    const { clock, start, step, call, pet } = world(on)
+  test('the button opens the handoff row beside him and closes it again', async ($, on) => {
+    const { start, step } = world(on)
     await start($)
     const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
     await step($)
-    await ui.press({ key: 'claudeagotchi-panel' })
-    let svgs = await ui.findAll({ type: 'Svg' })
-    expect(svgs).toHaveLength(2)
-    expect(String(svgs[1]?.props.source)).toContain('type="scale" values="0;1"')
-    expect(await ui.find({ key: 'claudeagotchi-handoff' })).toBeDefined()
-    await clock.advance(1000)
-    svgs = await ui.findAll({ type: 'Svg' })
-    expect(String(svgs[1]?.props.source)).not.toContain('<animate')
-
-    // Work moves on, but he stays put beside the open panel.
-    await $.turn.start({ text: 'go', turnId: 't1' })
-    const at = pet.view?.to
-    for (let i = 0; i < 4; i++) {
-      call($, { tool: 'Read', file_path: `/work/${i}.ts` })
-      await clock.advance(3000)
-    }
-    expect(pet.view?.to).toBe(at)
-
-    await ui.press({ key: 'claudeagotchi-panel' })
-    svgs = await ui.findAll({ type: 'Svg' })
-    expect(String(svgs[1]?.props.source)).toContain('type="scale" values="1;0"')
     expect(await ui.find({ key: 'claudeagotchi-handoff' })).toBeUndefined()
-    await clock.advance(2000)
-    expect(await ui.findAll({ type: 'Svg' })).toHaveLength(1)
-    expect(pet.view?.to).toBeGreaterThan(at ?? 0) // and off he goes again
-  })
-
-  test('the panel sits on the roomier side, and gives way on a narrow window', () => {
-    expect(placePanel(800, 0)?.side).toBe('right')
-    expect(placePanel(800, 1)?.side).toBe('left')
-    expect(placePanel(800, 0.5)?.w).toBe(48)
-    expect(placePanel(280, 0)?.w).toBe(30)
-    expect(placePanel(156, 0)).toBeNull()
+    await ui.press({ key: 'claudeagotchi-panel' })
+    expect(await ui.find({ key: 'claudeagotchi-handoff' })).toBeDefined()
+    expect(await ui.findAll({ type: 'Svg' })).toHaveLength(1) // just him: no panel drawing
+    await ui.press({ key: 'claudeagotchi-panel' })
+    expect(await ui.find({ key: 'claudeagotchi-handoff' })).toBeUndefined()
   })
 
   test('handing off asks first, writes the brief, starts fresh, and sends it', async ($, on) => {

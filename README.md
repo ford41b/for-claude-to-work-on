@@ -21,22 +21,11 @@ He is a native Claude Code mod: a plugin of function hooks. He only watches. Eve
 | ![](docs/previews/error.gif) | **Error** | A build, test or check command runs and fails, or a turn dies on an API error or refusal. A command you decline, a blocked command or an interrupted one is no failure. A brief startle, then a puzzled scratch of the head, then back to whatever is happening. |
 | ![](docs/previews/resting.gif) | **Resting** | Three quiet minutes. He sits down, closes his eyes and breathes. Any activity wakes him with a stretch. |
 
-## Walking the strip
+## Cache countdown and handoff
 
-He walks along the gray strip like a progress bar, with his legs stepping as he goes. A new task starts him at the left. He moves right as the work goes on, and walks to the right end when Claude's reply is finished. A thin track under him lights up orange behind him.
+At the right end of his band is a small button showing how long the conversation's prompt cache stays warm: `● 47m`, `0:42` in the last minute, `◌ Cold` after. The ring empties as the time runs down, and the label turns red in the last fifth. It restarts on every request the main conversation sends to the model, including each step of a reply that uses tools. While the cache is warm, your next message is read from it cheaply. Once it's cold, the next message writes the whole conversation to the cache again, which costs more and counts more against your usage.
 
-- **With a task list:** if Claude keeps one (`TodoWrite` or tasks), his place follows the share of items done.
-- **Without one:** each step of work moves him a little further, slowing as he goes, and he only reaches the end when the reply finishes.
-- **When he stops:** while something needs you, he stops where he is.
-
-## The cache panel
-
-At the right end of his strip is a small button showing the prompt cache's countdown, such as `● 47m`. Click it and a panel grows out of his body beside him. Click it again and the panel shrinks back into him. The panel shows:
-
-- **Cache warmth.** Time left before the conversation's prompt cache goes cold, with a bar that drains from green to yellow to red, then **COLD**. It restarts on every request the main conversation sends to the model, including each step of a reply that uses tools. While the cache is warm, your next message is read from it cheaply. Once it's cold, the next message writes the whole conversation to the cache again, which costs more and counts more against your usage.
-- **Hand off to a fresh session.** After you confirm "Start fresh with handoff?", he asks Claude for a handoff brief of this conversation (goal, what's done, current state, open issues, next steps, key files and decisions). He then clears the conversation with `/clear` and sends the brief as the first message of the new one. The brief is written over the conversation's own cached prompt, so it's cheap while the cache is warm. If the brief can't be written, nothing is cleared. If `/clear` can't run, the brief is left in your prompt box to send yourself. The button waits while Claude is working.
-
-While the panel is open he stays where he is, so he never walks under it. In a narrow window the panel gets smaller, and if there's no room for it beside him, only the button and the handoff row show.
+Click the button to show **Hand off to a fresh session** under it, and click it again to hide it. After you confirm "Start fresh with handoff?", he asks Claude for a handoff brief of this conversation (goal, what's done, current state, open issues, next steps, key files and decisions). He then clears the conversation with `/clear` and sends the brief as the first message of the new one. The brief is written over the conversation's own cached prompt, so it's cheap while the cache is warm. If the brief can't be written, nothing is cleared. If `/clear` can't run, the brief is left in your prompt box to send yourself. The handoff button waits while Claude is working.
 
 **Which TTL.** The cache lasts 5 minutes or 1 hour after each request. He reads which one your setup uses from the session's transcript, where the API records how many tokens each request wrote at either TTL, and remembers it for next time. Before any transcript has said, he assumes 5 minutes. `/pet cache 5m` or `/pet cache 1h` sets it yourself. `/pet cache auto` goes back to the transcript.
 
@@ -65,7 +54,7 @@ This installs at user scope, so he loads in every new Claude Code session. Start
 | --- | --- |
 | `/pet` | Show or hide him. The choice is remembered across sessions. |
 | `/pet off` · `/pet on` | Hide or show explicitly. |
-| `/pet panel` | Open or close the cache panel, same as its button. |
+| `/pet panel` | Show or hide the handoff row, same as the countdown button. |
 | `/pet cache` | The cache's TTL and where it came from, time since the last request, and time left. `/pet cache 5m`, `/pet cache 1h` or `/pet cache auto` sets the TTL, remembered across sessions. |
 | `/pet motion` | Toggle reduced motion: still, recognizable poses instead of animation. Remembered. |
 | `/pet preview` | Play every state in turn (about a minute) without any real work. Run it again to stop. |
@@ -88,7 +77,7 @@ To keep him installed but off, use `/pet off`, or `claude plugin disable claudea
 - **One session each.** Every session has its own companion, following only its own activity, subagents included. `/pet` and `/pet motion` apply to the session you type them in right away, and to other sessions the next time they start.
 - **Guesses from shell commands.** Whether a shell command is coding, reading, searching or a test is judged from its text, not its effect. A test command's exit code decides success or failure. An interrupted command is neither.
 - **Permission dialogs.** Claude Code reports when a dialog opens but not the moment you approve it. So after you approve a command he keeps his arm up until that command finishes, is denied, or the turn ends. He never drops it while you might still need to answer. In Auto mode, calls the classifier decides never show a dialog, so he doesn't raise his arm for them.
-- **Clicking him.** The app shows his drawing as a picture that can't be clicked, so the panel opens from the button beside him instead.
+- **Clicking him.** The app shows his drawing as a picture that can't be clicked, so the handoff opens from the countdown button instead.
 - **Reading the transcript.** To learn the TTL, he reads the end of the session's transcript (`~/.claude/projects/...`) with `tail`, looking only at timestamps and cache token counts. On Windows, where `tail` isn't available, he uses the TTL he last saw, or 5 minutes, and `/pet cache` sets it.
 - **Success is narrow on purpose.** He only celebrates a build, test or check that passed. Answers, edits and ordinary commands earn no hop.
 
@@ -99,6 +88,6 @@ claude plugin validate .   # manifest, hooks and state contract
 claude plugin test .       # simulated sessions: every state, priorities, timing, /pet
 ```
 
-`hooks/sprites.ts` holds the artwork: every pose is drawn on a 52×26 pixel grid (3 CSS px per pixel) and assembled into an SVG whose frames are switched by SMIL, so the animation runs in the app without the plugin redrawing. `hooks/machine.ts` decides the state from activity and how far along the task is. `hooks/cache.ts` times the prompt cache, and `hooks/panel.ts` draws the panel in the same pixels. `hooks/register.tsx` connects Claude Code's events and draws the band.
+`hooks/sprites.ts` holds the artwork: every pose is drawn on a 52×26 pixel grid (3 CSS px per pixel) and assembled into an SVG whose frames are switched by SMIL, so the animation runs in the app without the plugin redrawing. `hooks/machine.ts` decides the state from activity. `hooks/cache.ts` times the prompt cache. `hooks/register.tsx` connects Claude Code's events and draws the band.
 
 To try local changes without installing, run `claude --plugin-dir /path/to/this/folder`.
