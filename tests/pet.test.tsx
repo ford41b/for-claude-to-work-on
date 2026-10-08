@@ -3,7 +3,10 @@ import type { Engine, MockClock } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import type { PetSettings, PetView } from '../types'
-import { classify, isVerifyCommand } from '../hooks/machine'
+import { classify, freshProgress, isVerifyCommand, noteCall, progressOf } from '../hooks/machine'
+import { drawPet } from '../hooks/sprites'
+import { parseTail, readout } from '../hooks/cache'
+import { placePanel } from '../hooks/panel'
 
 // Simulated sessions: the test stands in for the engine beneath the plugin.
 // Its tools behave the way a real session was seen to: the permission check
@@ -37,6 +40,14 @@ function world(on: On, opts: { store?: Record<string, unknown> } = {}) {
   const asks = new Map<string, { afterMs: number; isRefused?: boolean }>() // dialogs by command
   const throws = new Set<string>()
   const pet = { view: undefined as PetView | undefined, settings: undefined as PetSettings | undefined, moods: [] as string[] }
+  // The handoff's three steps, as the engine would answer them.
+  const handoff = {
+    fork: { isAnswered: true, text: 'THE BRIEF', usage: USAGE } as Record<string, unknown>,
+    isClearRefused: false,
+    cleared: 0,
+    submitted: [] as string[],
+    filled: [] as string[],
+  }
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
@@ -70,6 +81,23 @@ function world(on: On, opts: { store?: Record<string, unknown> } = {}) {
     await eng.classic.PostToolUse({ ...ids, tool_response: result })
     return { result, text: answer.text }
   })
+  on('model.fork', () => ({ value: handoff.fork }) as never)
+  on('command.run', { command: 'clear' }, () => {
+    if (handoff.isClearRefused) throw new Error('refused')
+    handoff.cleared++
+    return { text: '' }
+  })
+  on('prompt.submit', ($, e) => {
+    handoff.submitted.push(e.text)
+    return { text: e.text }
+  })
+  on('prompt.fill', ($, e) => {
+    handoff.filled.push(e.text)
+    return { isFilled: true }
+  })
+  on('turn.step', async function* ($, e) {
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn', usage: { ...USAGE, model: e.model } } as never
+  })
   on('classic.PermissionRequest', () => ({}))
   on('classic.PostToolUse', () => ({}))
   on('classic.PostToolUseFailure', () => ({}))
@@ -97,8 +125,15 @@ function world(on: On, opts: { store?: Record<string, unknown> } = {}) {
     done.catch(() => {})
     return done
   }
-  return { clock, answers, delays, asks, throws, pet, start, call, mood: () => pet.view?.mood }
+  // One model request of the main conversation, or of a subagent.
+  const step = async ($: Engine, agentId?: string) => {
+    const s = $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: 1, ...(agentId ? { agentId } : {}) } as never)
+    while (!(await s.next()).done);
+  }
+  return { clock, answers, delays, asks, throws, pet, handoff, start, call, step, mood: () => pet.view?.mood }
 }
+
+const USAGE = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 10 }
 
 // Types `/pet <args>` at the prompt.
 function pet$($: Engine, args: string) {
@@ -547,5 +582,235 @@ describe('/pet', () => {
     await pet$($, 'off')
     await clock.advance(60_000)
     expect(pet.view?.preview).toBe(null)
+  })
+})
+
+describe('walking the strip as the task progresses', () => {
+  test('a new task starts him at the left, steps move him right, the answer takes him to the end', async ($, on) => {
+    const { clock, start, call, pet } = world(on)
+    await start($)
+    await $.turn.start({ text: 'build it', turnId: 't1' })
+    await clock.settle()
+    expect(pet.view?.to).toBe(0)
+    call($, { tool: 'Read', file_path: '/work/a.ts' })
+    await clock.advance(3000)
+    const early = pet.view?.to ?? 0
+    expect(early).toBeGreaterThan(0)
+    for (let i = 0; i < 6; i++) {
+      call($, { tool: 'Bash', command: `npm run step${i}` })
+      await clock.advance(3000)
+    }
+    const later = pet.view?.to ?? 0
+    expect(later).toBeGreaterThan(early)
+    expect(later).toBeLessThan(0.9) // never at the end before the answer
+    await $.turn.complete(turnEnd('t1'))
+    await clock.advance(3000)
+    expect(pet.view?.to).toBe(1)
+
+    await $.turn.start({ text: 'next thing', turnId: 't2' })
+    await clock.settle()
+    expect(pet.view?.to).toBe(0) // walks back to the start
+  })
+
+  test("Claude's task list sets how far along he is", async ($, on) => {
+    const { clock, start, call, pet } = world(on)
+    await start($)
+    await $.turn.start({ text: 'do four things', turnId: 't1' })
+    const todos = [
+      { content: 'a', status: 'completed', activeForm: 'a' },
+      { content: 'b', status: 'completed', activeForm: 'b' },
+      { content: 'c', status: 'in_progress', activeForm: 'c' },
+      { content: 'd', status: 'pending', activeForm: 'd' },
+    ]
+    call($, { tool: 'TodoWrite', todos })
+    await clock.advance(3000)
+    expect(Math.abs((pet.view?.to ?? 0) - 0.95 * (2.5 / 4))).toBeLessThan(1e-9)
+  })
+
+  test('he never walks off while something needs the person', async ($, on) => {
+    const { clock, asks, start, call, pet } = world(on)
+    await start($)
+    await $.turn.start({ text: 'go', turnId: 't1' })
+    for (let i = 0; i < 4; i++) {
+      call($, { tool: 'Bash', command: `npm run step${i}` })
+      await clock.advance(3000)
+    }
+    asks.set('rm -rf build', { afterMs: 60_000 })
+    call($, { tool: 'Bash', command: 'rm -rf build' })
+    await clock.settle()
+    expect(pet.view?.mood).toBe('attention')
+    expect(pet.view?.from).toBe(pet.view?.to)
+  })
+
+  test('the strip spans the band and he steps along it with moving legs', async ($, on) => {
+    const { clock, start, call } = world(on)
+    await start($)
+    const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+    expect((await ui.find({ type: 'Svg' }))?.props.width).toBe(720) // the panel's button takes the rest
+    await $.turn.start({ text: 'go', turnId: 't1' })
+    await clock.advance(3000) // back at the left end
+    call($, { tool: 'Read', file_path: '/work/a.ts' })
+    await clock.settle() // the step that sets him walking
+    const source = String((await ui.find({ type: 'Svg' }))?.props.source)
+    expect(source).toContain('<animateTransform')
+    expect(source).toContain('calcMode="discrete"')
+    expect(source).toContain('repeatDur=') // the stride plays only while he walks
+  })
+
+  test('progress creeps but never finishes on its own', () => {
+    const p = freshProgress()
+    expect(progressOf(p)).toBe(0)
+    for (let i = 0; i < 100; i++) noteCall(p, 'Bash', { command: 'ls' })
+    expect(progressOf(p)).toBeLessThan(0.86)
+    p.isDone = true
+    expect(progressOf(p)).toBe(1)
+  })
+
+  test('a walk draws the stride first, then the activity, on whole art pixels', () => {
+    const d = drawPet('coding', { strip: { px: 600, from: 0, to: 0.5 } })
+    expect(d.width).toBe(600)
+    const values = /values="([^"]*)" dur/.exec(d.source)?.[1] ?? ''
+    for (const v of values.split(';')) expect(Number(v.split(' ')[0]) % 3).toBe(0)
+    const still = drawPet('coding', { strip: { px: 600, from: 0.5, to: 0.5 } })
+    expect(still.source).not.toContain('<animateTransform')
+  })
+})
+
+describe('the cache panel and the handoff', () => {
+  const label = async (ui: { find: (q: { key: string }) => Promise<{ props: Record<string, unknown> } | undefined> }) =>
+    String((await ui.find({ key: 'claudeagotchi-panel' }))?.props.label)
+
+  test('the button beside him counts the cache down from each main request', async ($, on) => {
+    const { clock, start, step } = world(on)
+    await start($)
+    const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+    expect(await label(ui)).toBe('○ —')
+    await step($)
+    await clock.advance(1000)
+    expect(await label(ui)).toBe('● 5m')
+    await clock.advance(3 * 60_000)
+    expect(await label(ui)).toBe('◑ 2m')
+    await step($, 'agent-1') // a subagent's request keeps its own cache
+    await clock.advance(90_000)
+    expect(await label(ui)).toBe('○ 0:29') // the last minute counts seconds
+    expect((await ui.find({ key: 'claudeagotchi-panel' }))?.props.dimColor).toBe(false)
+    await clock.advance(60_000)
+    expect(await label(ui)).toBe('◌ Cold')
+    await step($)
+    await clock.advance(1000)
+    expect(await label(ui)).toBe('● 5m')
+  })
+
+  test('the countdown turns green, yellow, red, then cold', () => {
+    const c = { lastHit: 0, detected: '5m' as const, override: null, remembered: null }
+    expect(readout(c, 60_000).level).toBe('green')
+    expect(readout(c, 3 * 60_000).level).toBe('yellow')
+    expect(readout(c, 4.5 * 60_000)).toMatchObject({ level: 'red', label: '0:30' })
+    expect(readout(c, 5 * 60_000)).toMatchObject({ level: 'cold', label: 'Cold', step: 0 })
+    expect(readout({ ...c, override: '1h' }, 5 * 60_000)).toMatchObject({ level: 'green', label: '55m' })
+    expect(readout({ ...c, lastHit: null }, 0).label).toBe('—')
+  })
+
+  test('the TTL comes from the transcript, a choice, or the last one seen', async ($, on) => {
+    const { start } = world(on, { store: { lastSeenTtl: '1h' } })
+    await start($)
+    expect(String((await pet$($, 'cache')).text)).toContain('TTL 1h (from an earlier session)')
+    expect(String((await pet$($, 'cache 5m')).text)).toContain('TTL 5m (set with /pet cache)')
+    expect(String((await pet$($, 'cache auto')).text)).toContain('TTL 1h')
+    expect(String((await pet$($, 'cache 2h')).text)).toContain('Usage')
+  })
+
+  test('the transcript tells when the last request went out and at which TTL', () => {
+    const rows = [
+      'cut-off half line',
+      JSON.stringify({ type: 'user', timestamp: '2026-10-08T10:00:00.000Z' }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-10-08T10:00:05.000Z', message: { id: 'a', usage: { cache_creation: { ephemeral_1h_input_tokens: 900, ephemeral_5m_input_tokens: 0 } } } }),
+      JSON.stringify({ type: 'user', isSidechain: true, timestamp: '2026-10-08T10:09:00.000Z' }),
+    ].join('\n')
+    expect(parseTail(rows)).toEqual({ sentAt: Date.parse('2026-10-08T10:00:00.000Z'), ttl: '1h' })
+    expect(parseTail('nothing here')).toBeNull()
+  })
+
+  test('the panel grows out of him, he holds still while it is open, and it shrinks back', async ($, on) => {
+    const { clock, start, step, call, pet } = world(on)
+    await start($)
+    const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+    await step($)
+    await ui.press({ key: 'claudeagotchi-panel' })
+    let svgs = await ui.findAll({ type: 'Svg' })
+    expect(svgs).toHaveLength(2)
+    expect(String(svgs[1]?.props.source)).toContain('type="scale" values="0;1"')
+    expect(await ui.find({ key: 'claudeagotchi-handoff' })).toBeDefined()
+    await clock.advance(1000)
+    svgs = await ui.findAll({ type: 'Svg' })
+    expect(String(svgs[1]?.props.source)).not.toContain('<animate')
+
+    // Work moves on, but he stays put beside the open panel.
+    await $.turn.start({ text: 'go', turnId: 't1' })
+    const at = pet.view?.to
+    for (let i = 0; i < 4; i++) {
+      call($, { tool: 'Read', file_path: `/work/${i}.ts` })
+      await clock.advance(3000)
+    }
+    expect(pet.view?.to).toBe(at)
+
+    await ui.press({ key: 'claudeagotchi-panel' })
+    svgs = await ui.findAll({ type: 'Svg' })
+    expect(String(svgs[1]?.props.source)).toContain('type="scale" values="1;0"')
+    expect(await ui.find({ key: 'claudeagotchi-handoff' })).toBeUndefined()
+    await clock.advance(2000)
+    expect(await ui.findAll({ type: 'Svg' })).toHaveLength(1)
+    expect(pet.view?.to).toBeGreaterThan(at ?? 0) // and off he goes again
+  })
+
+  test('the panel sits on the roomier side, and gives way on a narrow window', () => {
+    expect(placePanel(800, 0)?.side).toBe('right')
+    expect(placePanel(800, 1)?.side).toBe('left')
+    expect(placePanel(800, 0.5)?.w).toBe(48)
+    expect(placePanel(280, 0)?.w).toBe(30)
+    expect(placePanel(156, 0)).toBeNull()
+  })
+
+  test('handing off asks first, writes the brief, starts fresh, and sends it', async ($, on) => {
+    const { start, step, handoff } = world(on)
+    await start($)
+    const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+    await step($)
+    await ui.press({ key: 'claudeagotchi-panel' })
+    await ui.press({ key: 'claudeagotchi-handoff' })
+    expect(await ui.find({ type: 'Text', text: 'Start fresh with handoff?' })).toBeDefined()
+    expect(handoff.cleared).toBe(0)
+    await ui.press({ key: 'claudeagotchi-handoff-no' })
+    expect(await ui.find({ key: 'claudeagotchi-handoff' })).toBeDefined()
+
+    await ui.press({ key: 'claudeagotchi-handoff' })
+    await ui.press({ key: 'claudeagotchi-handoff-yes' })
+    expect(handoff.cleared).toBe(1)
+    expect(handoff.submitted).toHaveLength(1)
+    expect(handoff.submitted[0]).toContain('THE BRIEF')
+    expect(await label(ui)).toBe('○ —') // a new conversation: nothing of it cached yet
+    expect(await ui.find({ key: 'claudeagotchi-handoff' })).toBeUndefined()
+  })
+
+  test('a handoff that cannot finish clears nothing, or leaves the brief to send', async ($, on) => {
+    const { start, step, handoff } = world(on)
+    await start($)
+    const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+    await step($)
+    await ui.press({ key: 'claudeagotchi-panel' })
+    handoff.fork = { isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: USAGE }
+    await ui.press({ key: 'claudeagotchi-handoff' })
+    await ui.press({ key: 'claudeagotchi-handoff-yes' })
+    expect(await ui.find({ type: 'Text', text: /API error 529.*Nothing was cleared/ })).toBeDefined()
+    expect(handoff.cleared).toBe(0)
+    await ui.press({ key: 'claudeagotchi-handoff-ok' })
+
+    handoff.fork = { isAnswered: true, text: 'THE BRIEF', usage: USAGE }
+    handoff.isClearRefused = true
+    await ui.press({ key: 'claudeagotchi-handoff' })
+    await ui.press({ key: 'claudeagotchi-handoff-yes' })
+    expect(handoff.submitted).toHaveLength(0)
+    expect(handoff.filled[0]).toContain('THE BRIEF')
+    expect(await ui.find({ type: 'Text', text: /brief is in your prompt box/ })).toBeDefined()
   })
 })

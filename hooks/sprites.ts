@@ -115,7 +115,7 @@ type Eyes =
   | 'puzzled'
   | 'happy'
 type Arm = 'out' | 'down' | 'chin' | 'scratch' | 'raise' | 'wave' | 'hover' | 'tap' | 'hold' | 'cheer' | 'stub' | 'stubUp'
-type Legs = 'stand' | 'tap' | 'tuck'
+type Legs = 'stand' | 'tap' | 'tuck' | 'stepA' | 'stepB'
 
 type Pose = {
   x?: number // body's left column
@@ -143,8 +143,10 @@ function creature(g: Grid, p: Pose = {}) {
   const legRows = p.legs === 'tuck' ? 2 : GROUND - lift - bottom
   if (legRows > 0) {
     for (const [i, col] of [0, 4, 10, 14].entries()) {
-      const isTapping = p.legs === 'tap' && i === 3
-      g.rect(x + col, bottom + 1, 2, legRows - (isTapping ? 1 : 0), 'body')
+      // A raised foot: the tapping front leg, or one pair of a walking stride.
+      const isRaised =
+        (p.legs === 'tap' && i === 3) || (p.legs === 'stepA' && (i === 0 || i === 2)) || (p.legs === 'stepB' && (i === 1 || i === 3))
+      g.rect(x + col, bottom + 1, 2, legRows - (isRaised ? 1 : 0), 'body')
     }
   }
 
@@ -698,14 +700,37 @@ function loopAnimation(windows: [number, number][], period: number, begin: numbe
 
 export type PetDrawing = { source: string; alt: string; width: number; height: number; isAnimated: boolean }
 
-export function drawPet(mood: Mood, opts: { variant?: number; reducedMotion?: boolean } = {}): PetDrawing {
-  const scene = SCENES[mood](opts.variant ?? 0)
-  const head = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W * SCALE}" height="${H * SCALE}" shape-rendering="crispEdges">${BACKDROP}`
-  const size = { alt: scene.alt, width: W * SCALE, height: H * SCALE }
-  if (opts.reducedMotion) {
-    return { ...size, source: `${head}${frameSvg(scene.still)}</svg>`, isAnimated: false }
-  }
+// Where he stands on the strip: `from` and `to` are fractions of the way
+// across (0 the left end, 1 the right), and `px` the strip's width in CSS px.
+export type Strip = { px: number; from: number; to: number }
 
+const WALK_PX_PER_S = 110
+const TRACK_GAP = 2 * SCALE
+const TRACK = '#2E2E2E'
+const TRACK_LIT = '#8A5644'
+const STEP_MS = 120
+
+// The walking cycle, facing the way he goes: one pair of feet up, pass, the
+// other pair up, pass, with a small dip on each pass.
+function walkFrames(isLeftward: boolean): Frame[] {
+  const eyes: Eyes = isLeftward ? 'left' : 'right'
+  return [
+    f(STEP_MS, pose({ eyes, legs: 'stepA' })),
+    f(STEP_MS, pose({ eyes, drop: 1 })),
+    f(STEP_MS, pose({ eyes, legs: 'stepB' })),
+    f(STEP_MS, pose({ eyes, drop: 1 })),
+  ]
+}
+
+export function walkMs(strip: Strip): number {
+  const travel = Math.max(0, strip.px - W * SCALE)
+  const distance = Math.abs(strip.to - strip.from) * travel
+  if (distance < SCALE) return 0
+  return Math.max(4 * STEP_MS, Math.round(((distance / WALK_PX_PER_S) * 1000) / (4 * STEP_MS)) * 4 * STEP_MS)
+}
+
+// The frames of a scene as SVG groups whose animations start `delay` ms in.
+function sceneGroups(scene: Scene, delay: number): string {
   // Each distinct frame is drawn once and shown in its windows of time.
   const bodies = new Map<string, { intro: string[]; windows: [number, number][] }>()
   const entry = (svg: string) => {
@@ -715,7 +740,7 @@ export function drawPet(mood: Mood, opts: { variant?: number; reducedMotion?: bo
   }
   const intro = scene.intro ?? []
   const loop = scene.loop ?? []
-  let t = 0
+  let t = delay
   intro.forEach((fr, i) => {
     const isFinal = i === intro.length - 1 && loop.length === 0
     entry(frameSvg(fr.draw)).intro.push(
@@ -762,7 +787,81 @@ export function drawPet(mood: Mood, opts: { variant?: number; reducedMotion?: bo
     if (e.windows.length) anims.push(loopAnimation(e.windows, period, begin))
     return `<g visibility="hidden">${svg}${anims.join('')}</g>`
   })
-  return { ...size, source: `${head}${baseGroup}${groups.join('')}</svg>`, isAnimated: true }
+  return baseGroup + groups.join('')
+}
+
+// The walking cycle, shown for the first `ms` of the drawing only.
+function walkGroups(isLeftward: boolean, ms: number): string {
+  const frames = walkFrames(isLeftward)
+  const period = frames.reduce((n, fr) => n + fr.ms, 0)
+  let at = 0
+  return frames
+    .map(fr => {
+      const windows: [number, number][] = [[at, at + fr.ms]]
+      at += fr.ms
+      const anim = loopAnimation(windows, period, 0).replace('repeatCount="indefinite"', `repeatDur="${ms}ms"`)
+      return `<g visibility="hidden">${frameSvg(fr.draw)}${anim}</g>`
+    })
+    .join('')
+}
+
+// The strip he walks along, shared with the panel drawn over it.
+export const STRIP_HEIGHT = H * SCALE + TRACK_GAP + SCALE
+// His body's middle within his own canvas, in art pixels: where the panel grows from.
+export const BODY_MIDDLE = { x: BODY_X + 8, y: GROUND - 10 }
+// The span of his body and arms within his canvas, in art pixels.
+export const BODY_SPAN = { left: BODY_X - 4, right: BODY_X + 20 }
+
+export function stripWidth(px: number): number {
+  return Math.max(W * SCALE, Math.round(px))
+}
+
+// Where his canvas starts along a strip `width` px wide, in whole art pixels so he stays crisp.
+export function stripX(width: number, fraction: number): number {
+  const travel = width - W * SCALE
+  return Math.round((Math.min(1, Math.max(0, fraction)) * travel) / SCALE) * SCALE
+}
+
+export function drawPet(mood: Mood, opts: { variant?: number; reducedMotion?: boolean; strip?: Strip } = {}): PetDrawing {
+  const scene = SCENES[mood](opts.variant ?? 0)
+  const petW = W * SCALE
+  const petH = H * SCALE
+  const strip = opts.strip ?? { px: petW, from: 0, to: 0 }
+  const width = stripWidth(strip.px)
+  const xAt = (fraction: number) => stripX(width, fraction)
+  // Under him runs a thin track, lit up to where he stands: the progress bar.
+  const height = STRIP_HEIGHT
+  const trackY = petH + TRACK_GAP
+  const head = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" shape-rendering="crispEdges"><rect width="${width}" height="${height}" fill="#212121"/><rect y="${trackY}" width="${width}" height="${SCALE}" fill="${TRACK}"/>`
+  const lit = (x: number) => x + petW / 2
+  const pet = (body: string) => `<svg width="${petW}" height="${petH}" viewBox="0 0 ${W} ${H}">${body}</svg>`
+  const size = { alt: scene.alt, width, height }
+
+  if (opts.reducedMotion) {
+    const x = xAt(strip.to)
+    const placed = `<g transform="translate(${x},0)">${pet(frameSvg(scene.still))}</g>`
+    const done = `<rect y="${trackY}" width="${lit(x)}" height="${SCALE}" fill="${TRACK_LIT}"/>`
+    return { ...size, source: `${head}${done}${placed}</svg>`, isAnimated: false }
+  }
+
+  const fromX = xAt(strip.from)
+  const toX = xAt(strip.to)
+  const ms = fromX === toX ? 0 : walkMs({ ...strip, px: width })
+  let move = ''
+  let fill = ''
+  if (ms > 0) {
+    // One value per art pixel along the way, held in turn: a stepped glide.
+    const dir = toX > fromX ? SCALE : -SCALE
+    const xs: number[] = []
+    for (let x = fromX; dir > 0 ? x <= toX : x >= toX; x += dir) xs.push(x)
+    const values = xs.map(x => `${x} 0`).join(';')
+    move = `<animateTransform attributeName="transform" type="translate" calcMode="discrete" values="${values}" dur="${ms}ms" fill="freeze"/>`
+    fill = `<animate attributeName="width" calcMode="discrete" values="${xs.map(lit).join(';')}" dur="${ms}ms" fill="freeze"/>`
+  }
+  const body = (ms > 0 ? walkGroups(toX < fromX, ms) : '') + sceneGroups(scene, ms)
+  const walker = `<g transform="translate(${toX},0)">${move}${pet(body)}</g>`
+  const done = `<rect y="${trackY}" width="${lit(toX)}" height="${SCALE}" fill="${TRACK_LIT}">${fill}</rect>`
+  return { ...size, source: `${head}${walker}${done}</svg>`, isAnimated: true }
 }
 
 // Every frame of a mood in order, for previews and tests.

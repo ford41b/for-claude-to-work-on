@@ -258,3 +258,48 @@ export function wasBackgrounded(response: unknown): boolean {
   const r = (response ?? {}) as { backgroundTaskId?: unknown; backgroundedByUser?: unknown; timedOutAfterMs?: unknown }
   return !!(r.backgroundTaskId || r.backgroundedByUser || r.timedOutAfterMs)
 }
+
+// ---------------------------------------------------------------- progress
+
+// How far along the current task is, from 0 (just asked) to 1 (answered).
+// Claude's own task list is the measure when it keeps one; otherwise each
+// step creeps him forward, never past most of the way, until the answer.
+export type Progress = {
+  steps: number
+  todos: { status: string }[] // the latest TodoWrite list
+  tasks: Map<string, string> // task list entries by id, with their status
+  created: number // tasks created this turn
+  isDone: boolean
+}
+
+export function freshProgress(): Progress {
+  return { steps: 0, todos: [], tasks: new Map(), created: 0, isDone: false }
+}
+
+const STEP_CREEP = 5 // steps to cover about two thirds of the creep
+const CREEP_MAX = 0.85
+const LIST_MAX = 0.95 // a finished list still waits for the answer
+
+export function progressOf(p: Progress): number {
+  if (p.isDone) return 1
+  const statuses = p.todos.length > 0 ? p.todos.map(t => t.status) : [...p.tasks.values()]
+  const total = p.todos.length > 0 ? p.todos.length : Math.max(p.created, p.tasks.size)
+  if (total > 0) {
+    const done = statuses.filter(s => s === 'completed').length
+    const doing = statuses.filter(s => s === 'in_progress').length
+    return Math.min(LIST_MAX, ((done + doing / 2) / total) * LIST_MAX)
+  }
+  return CREEP_MAX * (1 - Math.exp(-p.steps / STEP_CREEP))
+}
+
+// What a tool call says about progress: a step, and the task list it changes.
+export function noteCall(p: Progress, tool: string, input: Record<string, unknown>) {
+  p.steps++
+  if (tool === 'TodoWrite' && Array.isArray(input.todos)) {
+    p.todos = input.todos.map(t => ({ status: String((t as { status?: unknown }).status ?? 'pending') }))
+  }
+  if (tool === 'TaskCreate') p.created++
+  if (tool === 'TaskUpdate' && typeof input.taskId === 'string' && typeof input.status === 'string') {
+    p.tasks.set(input.taskId, input.status)
+  }
+}
