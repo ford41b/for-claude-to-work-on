@@ -10,7 +10,7 @@ export const GET = route("account.export", async () => {
   return new Response(body, {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="sermon-notebook-export-${new Date().toISOString().slice(0, 10)}.json"`,
+      "Content-Disposition": `attachment; filename="berean-export-${new Date().toISOString().slice(0, 10)}.json"`,
       "Cache-Control": "no-store",
     },
   });

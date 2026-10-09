@@ -35,6 +35,7 @@ export async function exportAccount(ctx: ServiceContext) {
   );
   return {
     exported_at: new Date().toISOString(),
+    // Stable format id from the earlier working name; changing it would break existing exports.
     format: "sermon-notebook-export/v1",
     note: "Notes are ProseMirror JSON (see notes.content) with plain text in notes.plain_text. File links expire after 24 hours.",
     data,

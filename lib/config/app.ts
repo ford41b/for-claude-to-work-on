@@ -1,4 +1,4 @@
-export const APP_NAME = "Sermon Notebook";
+export const APP_NAME = "Berean";
 export const APP_DESCRIPTION = "Capture a sermon, your notes, and photos — and turn them into a study notebook you can trust.";
 
 /** Upload limits (bytes). Buckets enforce matching caps server-side. */

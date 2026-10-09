@@ -1,6 +1,9 @@
-# Architecture — Sermon Notebook
+# Architecture — Berean
 
-Working product name: **Sermon Notebook** (one constant, `APP_NAME` in `lib/config/app.ts`).
+Product name: **Berean** (one constant, `APP_NAME` in `lib/config/app.ts`), after Acts 17:11. Earlier
+working name: Sermon Notebook. Stable identifiers kept from that name so existing data keeps
+working: the export format id `sermon-notebook-export/v1` and the browser offline store
+`sermon-notebook` (IndexedDB).
 
 This document is the pre-implementation architecture requested in §96 of the master brief
 (sections **A–L**). It is kept current as the code evolves. Status markers used throughout:
@@ -22,7 +25,7 @@ Companion documents: [DATABASE.md](DATABASE.md), [AI_PIPELINE.md](AI_PIPELINE.md
 
 ### A.1 The one idea
 
-Every sermon is a **Sermon Notebook**: a container of *evidence* (the sermon recording, the
+Every sermon is a **sermon notebook**: a container of *evidence* (the sermon recording, the
 user's notes, photos, documents, captured moments) from which the app derives one canonical,
 versioned, source-grounded **Sermon Pack**. Every downstream feature — overview, timeline,
 Ask AI, Bible study, review, and later flashcards/quiz/audio/video — reads the Pack plus the

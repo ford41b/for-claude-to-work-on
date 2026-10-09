@@ -1,4 +1,4 @@
-# Sermon Notebook
+# Berean
 
 Capture a sermon, your notes, and photos of the slides, and turn them into a study notebook
 you can trust. Every summary, idea and quote links back to where it came from: your notes, a

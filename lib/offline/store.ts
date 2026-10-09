@@ -42,6 +42,7 @@ let dbPromise: Promise<IDBPDatabase<NotebookDB>> | null = null;
 function database() {
   if (typeof indexedDB === "undefined") return null;
   if (!dbPromise) {
+    // Kept from the earlier working name so drafts already saved offline are not orphaned.
     dbPromise = openDB<NotebookDB>("sermon-notebook", 1, {
       upgrade(db) {
         db.createObjectStore("drafts", { keyPath: "noteId" });

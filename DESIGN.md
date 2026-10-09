@@ -1,5 +1,5 @@
 ---
-name: Sermon Notebook
+name: Berean
 description: A field notebook kept alongside a study Bible — every line knows who said it and where it came from.
 colors:
   paper: "oklch(0.972 0.006 80)"
@@ -131,7 +131,7 @@ components:
     padding: "0 12px"
 ---
 
-# Design System: Sermon Notebook
+# Design System: Berean
 
 > Recorded from the shipped code (`app/globals.css`, `components/ui/*`, `components/sources/*`,
 > `components/sermon/*`) on 2026-09-28. Tokens are normative; the prose explains how to apply
